@@ -1,0 +1,90 @@
+// 合成音效（Web Audio，無需音檔）
+export class Sfx {
+  constructor() {
+    this.ctx = null;
+    this.enabled = true;
+    this._lastHover = 0;
+  }
+  _ensure() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain(); this.master.gain.value = 0.5;
+      this.master.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate;
+      this.noiseBuf = this.ctx.createBuffer(1, len, len);
+      const d = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    return this.enabled;
+  }
+  unlock() { this._ensure(); }
+
+  _tone(freq, dur, { type = 'sine', vol = 0.3, slide = null, delay = 0, attack = 0.005 } = {}) {
+    const c = this.ctx, t = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  _noise(dur, { vol = 0.3, freq = 1000, q = 1, type = 'bandpass', slide = null, delay = 0 } = {}) {
+    const c = this.ctx, t = c.currentTime + delay;
+    const s = c.createBufferSource(); s.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+  }
+
+  place(big = false) {
+    if (!this._ensure()) return;
+    this._tone(big ? 90 : 140, big ? 0.5 : 0.22, { slide: big ? 35 : 60, vol: big ? 0.7 : 0.45 });
+    this._noise(0.08, { vol: 0.35, freq: 3500, q: 0.8 });
+    if (big) { this._noise(0.9, { vol: 0.4, freq: 400, type: 'lowpass', slide: 60 }); this._tone(523, 0.6, { type: 'triangle', vol: 0.12, delay: 0.05 }); this._tone(784, 0.7, { type: 'triangle', vol: 0.1, delay: 0.1 }); }
+  }
+  flip() {
+    if (!this._ensure()) return;
+    const f = 900 + Math.random() * 500;
+    this._tone(f, 0.12, { type: 'triangle', slide: f * 1.6, vol: 0.12 });
+    this._noise(0.05, { vol: 0.12, freq: 6000, delay: 0.25 });
+  }
+  hover() {
+    if (!this._ensure()) return;
+    const now = performance.now(); if (now - this._lastHover < 60) return; this._lastHover = now;
+    this._tone(1800, 0.04, { type: 'sine', vol: 0.03 });
+  }
+  zap() {
+    if (!this._ensure()) return;
+    this._noise(0.3, { vol: 0.5, freq: 2500, q: 3, slide: 6000 });
+    this._tone(60, 0.25, { type: 'sawtooth', vol: 0.15, slide: 40 });
+  }
+  select() { if (this._ensure()) { this._tone(660, 0.12, { type: 'triangle', vol: 0.15 }); this._tone(990, 0.15, { type: 'triangle', vol: 0.12, delay: 0.06 }); } }
+  error() { if (this._ensure()) this._tone(180, 0.2, { type: 'square', vol: 0.08, slide: 120 }); }
+  turn() { if (this._ensure()) { this._tone(880, 0.15, { vol: 0.1 }); this._tone(1320, 0.25, { vol: 0.08, delay: 0.08 }); } }
+
+  ability(id) {
+    if (!this._ensure()) return;
+    const T = (...a) => this._tone(...a), N = (...a) => this._noise(...a);
+    switch (id) {
+      case 'newton': T(400, 0.9, { slide: 80, vol: 0.25 }); N(0.9, { freq: 300, slide: 2000, vol: 0.3 }); break;
+      case 'einstein': T(220, 1.6, { type: 'sine', slide: 110, vol: 0.3 }); T(330, 1.6, { type: 'triangle', slide: 165, vol: 0.12 }); N(1.4, { freq: 4000, slide: 300, vol: 0.2 }); break;
+      case 'curie': for (let i = 0; i < 12; i++) N(0.03, { freq: 5000, vol: 0.4, delay: Math.random() * 0.9 }); T(110, 1, { type: 'sawtooth', vol: 0.06 }); break;
+      case 'tesla': T(55, 1.2, { type: 'sawtooth', vol: 0.15, slide: 70 }); N(1, { freq: 1500, q: 2, vol: 0.2 }); break;
+      case 'faraday': T(300, 0.8, { type: 'square', vol: 0.06, slide: 900 }); T(600, 1.0, { type: 'sine', vol: 0.15, slide: 1200, delay: 0.1 }); break;
+      case 'hawking': T(80, 2, { slide: 25, vol: 0.6 }); N(2, { freq: 800, type: 'lowpass', slide: 50, vol: 0.5 }); break;
+      case 'turing': for (let i = 0; i < 14; i++) T(400 + Math.random() * 1600, 0.06, { type: 'square', vol: 0.05, delay: i * 0.06 }); break;
+      case 'schrodinger': T(440, 1.5, { type: 'sine', vol: 0.15, slide: 880 }); T(466, 1.5, { type: 'sine', vol: 0.15, slide: 830 }); break;
+      case 'darwin': [392, 494, 587, 784].forEach((f, i) => T(f, 0.5, { type: 'triangle', vol: 0.12, delay: i * 0.12 })); N(1, { freq: 2000, vol: 0.08 }); break;
+      default: break;
+    }
+  }
+  banner() { if (this._ensure()) { this._noise(0.8, { freq: 200, slide: 5000, vol: 0.25 }); this._tone(196, 1.2, { type: 'sawtooth', vol: 0.06 }); this._tone(294, 1.2, { type: 'sawtooth', vol: 0.05 }); } }
+  win() { if (this._ensure()) [523, 659, 784, 1047].forEach((f, i) => this._tone(f, 0.8, { type: 'triangle', vol: 0.18, delay: i * 0.15 })); }
+  lose() { if (this._ensure()) [392, 349, 311, 262].forEach((f, i) => this._tone(f, 0.7, { type: 'triangle', vol: 0.15, delay: i * 0.18 })); }
+}

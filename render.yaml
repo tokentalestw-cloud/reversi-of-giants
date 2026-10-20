@@ -1,0 +1,13 @@
+# Render Blueprint：在 Render 選 New > Blueprint 並指定此 repo 即可自動建立服務
+services:
+  - type: web
+    name: reversi-of-giants
+    runtime: python
+    plan: free
+    buildCommand: echo "no dependencies"
+    startCommand: python server.py
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7

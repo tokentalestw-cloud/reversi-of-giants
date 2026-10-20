@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>科學巨人黑白棋 · Reversi of Giants</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&family=Cinzel:wght@600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- 對局 HUD -->
+  <div id="hud" class="hidden">
+    <div class="player-panel" id="panel-1">
+      <div class="disc black"></div>
+      <div class="pinfo">
+        <div class="pname"><span class="pn">黑方</span><span class="tag" id="tag-1"></span></div>
+        <div class="charges" id="charges-1"></div>
+        <div class="used" id="used-1"></div>
+      </div>
+      <div class="score" id="score-1">2</div>
+    </div>
+    <div id="turn-indicator"><div class="ti-label">回合</div><div class="ti-text" id="turn-text">黑方</div><div class="ti-ply" id="ply-text">第 1 手</div></div>
+    <div class="player-panel right" id="panel-2">
+      <div class="score" id="score-2">2</div>
+      <div class="pinfo">
+        <div class="pname"><span class="tag" id="tag-2"></span><span class="pn">白方</span></div>
+        <div class="charges" id="charges-2"></div>
+        <div class="used" id="used-2"></div>
+      </div>
+      <div class="disc white"></div>
+    </div>
+  </div>
+
+  <div id="topbar" class="hidden">
+    <div id="room-badge" class="hidden"></div>
+    <button class="icon-btn" id="btn-rules" title="規則與圖鑑">📖</button>
+    <button class="icon-btn" id="btn-sound" title="音效">🔊</button>
+    <button class="icon-btn" id="btn-leave" title="離開對局">⏏</button>
+  </div>
+
+  <!-- 科學家牌組 -->
+  <div id="deck" class="hidden">
+    <div id="card-detail" class="hidden"></div>
+    <div class="deck-head">
+      <span class="deck-title">科學家棋子</span>
+      <span class="deck-sub" id="deck-sub">每局可使用 3 次 · 每位科學家限用 1 次</span>
+    </div>
+    <div id="cards"></div>
+  </div>
+
+  <button id="pass-btn" class="btn gold hidden">無子可下 · 跳過回合</button>
+  <div id="log" class="hidden"></div>
+  <div id="toast-wrap"></div>
+
+  <!-- 技能發動橫幅 -->
+  <div id="banner" class="hidden">
+    <div class="banner-stripe"></div>
+    <div class="banner-inner">
+      <div class="banner-portrait"><img id="banner-img" alt="" /></div>
+      <div class="banner-text">
+        <div class="b-player" id="b-player"></div>
+        <div class="b-skill" id="b-skill"></div>
+        <div class="b-name" id="b-name"></div>
+        <div class="b-quote" id="b-quote"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 大廳 -->
+  <div id="lobby" class="overlay">
+    <div class="lobby-card">
+      <div class="title-en">REVERSI OF GIANTS</div>
+      <h1>科學巨人黑白棋</h1>
+      <div class="subtitle">召喚歷代科學巨匠，以知識改寫棋局</div>
+      <div class="lobby-actions">
+        <button class="btn gold big" id="btn-create">🌐 建立線上房間</button>
+        <div class="join-row">
+          <input id="join-code" maxlength="4" placeholder="房間代碼" autocomplete="off" />
+          <button class="btn" id="btn-join">加入房間</button>
+        </div>
+        <div class="row2">
+          <button class="btn" id="btn-local">👥 本機雙人</button>
+          <button class="btn" id="btn-ai">🤖 對戰電腦</button>
+        </div>
+        <button class="btn ghost" id="btn-rules2">📖 規則與科學家圖鑑</button>
+      </div>
+      <div class="lobby-portraits" id="lobby-portraits"></div>
+    </div>
+  </div>
+
+  <!-- 等待對手 -->
+  <div id="waiting" class="overlay hidden">
+    <div class="modal">
+      <div class="m-title">等待對手加入…</div>
+      <div class="m-sub">把房間代碼或連結分享給朋友</div>
+      <div class="room-code" id="room-code">----</div>
+      <div class="share-row">
+        <input id="share-link" readonly />
+        <button class="btn" id="btn-copy">複製連結</button>
+      </div>
+      <div class="spinner"></div>
+      <button class="btn ghost" id="btn-cancel-wait">取消</button>
+    </div>
+  </div>
+
+  <!-- 結束 -->
+  <div id="gameover" class="overlay hidden">
+    <div class="modal">
+      <div class="m-title" id="go-title">勝利</div>
+      <div class="go-score">
+        <div class="go-side"><div class="disc black"></div><span id="go-black">0</span></div>
+        <div class="go-vs">VS</div>
+        <div class="go-side"><span id="go-white">0</span><div class="disc white"></div></div>
+      </div>
+      <div class="m-sub" id="go-sub"></div>
+      <div class="row2">
+        <button class="btn gold" id="btn-rematch">再來一局</button>
+        <button class="btn ghost" id="btn-tolobby">返回大廳</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 規則 / 圖鑑 -->
+  <div id="rules" class="overlay hidden">
+    <div class="modal wide">
+      <button class="close-x" id="btn-close-rules">✕</button>
+      <div class="m-title">遊戲規則</div>
+      <ul class="rules-list">
+        <li>基本規則同傳統黑白棋：落子必須夾住對手棋子，被夾住的棋子翻面。黑方先手。</li>
+        <li>每位玩家每局可使用 <b>3 次</b> 科學家棋子，每位科學家每局限用 1 次；<b>第 5 手起</b>才能召喚科學家。</li>
+        <li><b>最後防線</b>：科學家的效果不會吃光對手最後一枚棋子（一般夾擊不受此限）。</li>
+        <li>在下方牌組點選科學家後，棋盤會以該科學家的顏色標示可選位置。再點一次卡片可取消。</li>
+        <li>若沒有合法位置但仍有可用的「任意空格／敵子」型科學家，可選擇使用或跳過回合；雙方皆無法行動時對局結束，棋子多者勝。</li>
+        <li>帶有彩色光環的棋子代表由科學家放置。黑洞格永久無法落子，並會阻斷夾擊連線。</li>
+      </ul>
+      <div class="m-title small">科學家圖鑑</div>
+      <div class="gallery" id="gallery"></div>
+    </div>
+  </div>
+
+  <div id="loading"><div class="spinner"></div><div>載入 3D 引擎中…</div></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
