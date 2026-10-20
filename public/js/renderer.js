@@ -600,6 +600,33 @@ export class BoardView {
           await this.wait(0.25);
           break;
 
+        case 'fivewhip': {
+          this.sfx?.ability('mabaoguo');
+          const flips = [];
+          const a = cellPos(st.origin, 0.42);
+          for (let k = 0; k < 5; k++) {
+            const targetCell = st.cells[k];
+            let b;
+            if (targetCell != null) {
+              b = cellPos(targetCell, 0.35);
+            } else {
+              const ang = (k / 5) * Math.PI * 2;
+              b = new THREE.Vector3(
+                THREE.MathUtils.clamp(a.x + Math.cos(ang) * 1.8, -3.5, 3.5),
+                0.35,
+                THREE.MathUtils.clamp(a.z + Math.sin(ang) * 1.8, -3.5, 3.5),
+              );
+            }
+            this.effects.whipStrike(a, b, fx, k);
+            this.sfx?.whip(k);
+            this.shake(0.14 + k * 0.02);
+            if (targetCell != null) flips.push(this.flipPiece(targetCell, color, st.origin, fx));
+            await this.wait(0.22);
+          }
+          await Promise.all(flips);
+          break;
+        }
+
         default: break;
       }
     }

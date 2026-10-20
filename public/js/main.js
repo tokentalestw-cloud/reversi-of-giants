@@ -309,7 +309,7 @@ function logResult(res) {
   if (res.action.type === 'pass') { log(`${who} 跳過回合`, pc); return; }
   let flipped = 0, removed = 0;
   for (const st of res.steps) {
-    if (st.kind === 'flip' || st.kind === 'lightning') flipped += st.cells.length;
+    if (st.kind === 'flip' || st.kind === 'lightning' || st.kind === 'fivewhip') flipped += st.cells.length;
     if (st.kind === 'remove') removed += st.cells.length;
   }
   const where = cellName(res.action.cell);
@@ -320,6 +320,7 @@ function logResult(res) {
     if (res.ability === 'schrodinger') extra = (res.collapse ? '坍縮為己方！' : '坍縮為對手…') + (flipped ? ` 翻轉 ${flipped} 子` : '');
     if (res.ability === 'faraday') extra += '，展開電磁屏蔽';
     if (res.ability === 'einstein') extra += '，獲得額外回合';
+    if (res.ability === 'mabaoguo') extra = `五連鞭連擊，共翻轉 ${flipped} 子`;
     log(`${who} 召喚 <b>${s.short}・${s.skill}</b> 於 ${where}${extra ? '，' + extra : ''}`, s.color);
   } else {
     log(`${who} 落子 ${where}，翻轉 ${flipped} 子`, pc);

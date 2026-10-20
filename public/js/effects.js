@@ -15,6 +15,7 @@ export class Effects {
     this._digitTex = ['0', '1'].map(d => this._textTexture(d, '#00ff9c'));
     this._qTex = this._textTexture('?', '#ff4fd8');
     this._leafTex = this._textTexture('❦', '#9be15d');
+    this._whipTex = ['閃', '電', '五', '連', '鞭'].map(ch => this._textTexture(ch, '#ffe14d'));
   }
 
   // ------------------------------------------------------------ 粒子
@@ -441,6 +442,63 @@ export class Effects {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 2, 24, 1, true), pillarMaterial(color));
     m.position.set(pos.x, 1, pos.z);
     this.add(m, t => { const k = t / dur; if (k >= 1) return false; m.material.uniforms.uOpacity.value = Math.sin(k * Math.PI); m.scale.set(1 - k * 0.3, 1, 1 - k * 0.3); });
+  }
+
+  /** 馬保國：閃電五連鞭（金雷長鞭弧線 + 閃電伴隨 + 「閃電五連鞭」浮空大字） */
+  whipStrike(a, b, color = '#ffe14d', whipIdx = 0, dur = 0.42) {
+    const g = new THREE.Group();
+    const coreMat = this.glowMat('#ffffff', 1, 4);
+    const whipMat = this.glowMat(color, 0.9, 3.5);
+    const dir = b.clone().sub(a);
+    const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+    const sign = whipIdx % 2 === 0 ? 1 : -1;
+
+    const rebuild = phase => {
+      g.children.forEach(c => c.geometry.dispose());
+      g.clear();
+      const pts = [], n = 16;
+      for (let i = 0; i <= n; i++) {
+        const u = i / n;
+        const p = a.clone().lerp(b, u);
+        const wave = Math.sin(u * Math.PI * 2 - phase * 14) * Math.sin(u * Math.PI) * 0.65 * sign;
+        p.addScaledVector(side, wave);
+        p.y += Math.sin(u * Math.PI) * 1.15 + Math.cos(u * Math.PI * 3 - phase * 10) * 0.12;
+        pts.push(p);
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.032, 6), coreMat));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.095, 8), whipMat));
+    };
+    rebuild(0);
+    this.add(g, t => {
+      if (t >= dur) { coreMat.dispose(); whipMat.dispose(); return false; }
+      rebuild(t);
+      const o = 1 - t / dur;
+      coreMat.opacity = o;
+      whipMat.opacity = 0.9 * o;
+    });
+
+    // 伴隨青金閃電與鞭擊震波
+    this.lightning(a, b, '#6fe8ff', 0.26);
+    this.shockwave(b, color, 1.35, 0.38, 0.04, 0.15);
+    this.burst(b, color, 45, { speed: 4.8, size: 0.16, mix: '#6fe8ff' });
+    this.flash(b, color, 45, 0.35);
+
+    // 浮現「閃・電・五・連・鞭」大字特效
+    const tex = this._whipTex[whipIdx % this._whipTex.length];
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.2, 2.0, 1.4),
+    }));
+    sp.position.set(b.x, 0.65, b.z);
+    sp.scale.setScalar(0.85);
+    this.add(sp, t => {
+      const k = t / 0.65;
+      if (k >= 1) return false;
+      sp.position.y = 0.65 + k * 0.9;
+      const s = k < 0.2 ? 0.5 + (k / 0.2) * 0.55 : 1.05 - (k - 0.2) * 0.25;
+      sp.scale.setScalar(s);
+      sp.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+    });
   }
 }
 

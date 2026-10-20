@@ -64,6 +64,13 @@ export class Sfx {
     this._noise(0.3, { vol: 0.5, freq: 2500, q: 3, slide: 6000 });
     this._tone(60, 0.25, { type: 'sawtooth', vol: 0.15, slide: 40 });
   }
+  whip(idx = 0) {
+    if (!this._ensure()) return;
+    const base = 180 + idx * 45;
+    this._noise(0.14, { vol: 0.55, freq: 900, q: 1.8, slide: 6800 });
+    this._noise(0.06, { vol: 0.65, freq: 4500, q: 3.5, delay: 0.04 });
+    this._tone(base, 0.18, { type: 'sawtooth', vol: 0.22, slide: base * 2.4 });
+  }
   select() { if (this._ensure()) { this._tone(660, 0.12, { type: 'triangle', vol: 0.15 }); this._tone(990, 0.15, { type: 'triangle', vol: 0.12, delay: 0.06 }); } }
   error() { if (this._ensure()) this._tone(180, 0.2, { type: 'square', vol: 0.08, slide: 120 }); }
   turn() { if (this._ensure()) { this._tone(880, 0.15, { vol: 0.1 }); this._tone(1320, 0.25, { vol: 0.08, delay: 0.08 }); } }
@@ -81,6 +88,7 @@ export class Sfx {
       case 'turing': for (let i = 0; i < 14; i++) T(400 + Math.random() * 1600, 0.06, { type: 'square', vol: 0.05, delay: i * 0.06 }); break;
       case 'schrodinger': T(440, 1.5, { type: 'sine', vol: 0.15, slide: 880 }); T(466, 1.5, { type: 'sine', vol: 0.15, slide: 830 }); break;
       case 'darwin': [392, 494, 587, 784].forEach((f, i) => T(f, 0.5, { type: 'triangle', vol: 0.12, delay: i * 0.12 })); N(1, { freq: 2000, vol: 0.08 }); break;
+      case 'mabaoguo': T(110, 0.45, { type: 'sawtooth', slide: 330, vol: 0.25 }); N(0.35, { freq: 1200, slide: 4800, vol: 0.35 }); break;
       default: break;
     }
   }

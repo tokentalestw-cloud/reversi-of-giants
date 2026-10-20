@@ -55,6 +55,12 @@ export const SCIENTISTS = [
     desc: '一般落子後啟動天擇：全盤上周圍 8 格中有 5 枚以上己方棋子的敵子，因無法適應而被同化翻轉。',
     quote: '生命如是之觀，何等壯麗恢弘。',
   },
+  {
+    id: 'mabaoguo', name: '馬保國', short: '馬保國', en: 'Master Ma Baoguo', years: '1952–',
+    field: '渾元形意太極門・傳統功夫', skill: '閃電五連鞭', target: 'legal', color: '#ffe14d',
+    desc: '一般落子後施展渾元勁「閃電五連鞭」：連續揮出五記金雷鞭擊，每次隨機抽打距離落點 3 格內的 1 枚敵方棋子使其翻轉（最多連抽 5 枚）！',
+    quote: '年輕人不講武德，耗子尾汁！看我閃電五連鞭！',
+  },
 ];
 
 const MAP = Object.fromEntries(SCIENTISTS.map(s => [s.id, s]));

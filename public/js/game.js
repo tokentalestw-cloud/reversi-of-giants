@@ -253,6 +253,21 @@ export class Game {
           break;
         }
 
+        case 'mabaoguo': {
+          basic();
+          const hits = [];
+          for (let k = 0; k < 5; k++) {
+            const cand = [];
+            for (let c = 0; c < 64; c++) if (enemyOK(c) && cheb(c, i) <= 3) cand.push(c);
+            if (!cand.length || this.count(o) <= 1) break;
+            const pick = cand[Math.floor(rng() * cand.length)];
+            B[pick] = color;
+            hits.push(pick);
+          }
+          res.steps.push({ kind: 'fivewhip', origin: i, cells: hits });
+          break;
+        }
+
         default: throw new Error('未知的能力');
       }
 
