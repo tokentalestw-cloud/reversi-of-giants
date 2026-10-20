@@ -98,7 +98,20 @@ function renderHUD() {
 function renderDeck() {
   const g = S.game, color = deckColor();
   const canAct = isMyTurn() && !S.busy;
-  $('#deck-sub').textContent = g.ply < UNLOCK_PLY ? `科學家將於第 ${UNLOCK_PLY + 1} 手解鎖（點擊卡片可查看說明）` : `${colorName(color)} 剩餘 ${g.charges[color]} 次 · 每位科學家每局限用 1 次`;
+  $('#deck-sub').textContent = g.ply < UNLOCK_PLY ? `第 ${UNLOCK_PLY + 1} 手解鎖（點卡片看說明）` : `${colorName(color)}剩 ${g.charges[color]} 次 · 每位限 1 次`;
+
+  if (S.selected) {
+    const sc = getScientist(S.selected);
+    show('#deck-head-normal', false);
+    show('#deck-head-active', true);
+    $('#deck-head-active').style.setProperty('--c', sc.color);
+    $('#da-text').textContent = `✦ 已選：${sc.short}【${sc.skill}】點棋盤發動`;
+    $('#btn-toggle-detail').textContent = S.detailId === S.selected ? '收起說明' : '查看說明';
+  } else {
+    show('#deck-head-normal', true);
+    show('#deck-head-active', false);
+  }
+
   const wrap = $('#cards');
   if (!wrap.children.length) {
     for (const s of SCIENTISTS) {
@@ -128,6 +141,7 @@ function hideDetail() {
   S.detailId = null;
   S.pinnedDetail = false;
   show('#card-detail', false);
+  if (S.game) renderDeck();
 }
 
 function showDetail(id, pinned = false) {
@@ -136,27 +150,66 @@ function showDetail(id, pinned = false) {
   if (pinned) S.pinnedDetail = true;
   el.style.setProperty('--c', s.color);
   const g = S.game, color = deckColor();
-  let hint = '點擊說明框、再點一次卡片或按 ✕ 即可關閉說明';
+  const isSelected = S.selected === id;
+  let statusText = '';
   if (g) {
-    if (S.selected === id) hint = '✦ 已選取：請點擊棋盤上的標示格發動（再點一次卡片或按 ✕ 取消）';
-    else if (g.used[color].includes(id)) hint = '此科學家本局已使用過（點擊關閉說明）';
-    else if (g.ply < UNLOCK_PLY) hint = `將於第 ${UNLOCK_PLY + 1} 手解鎖使用（點擊關閉說明）`;
+    if (isSelected) statusText = '✦ 已選取：可直接點擊中央棋盤發動，或收起說明後落子';
+    else if (g.used[color].includes(id)) statusText = '（此科學家本局已使用過）';
+    else if (g.ply < UNLOCK_PLY) statusText = `（將於第 ${UNLOCK_PLY + 1} 手解鎖使用）`;
   }
-  el.innerHTML = `<button class="cd-close" title="關閉說明">✕</button><img src="${portraitUrl(id)}" alt=""><div><div class="cd-name">${s.name} <span style="font-size:12px;color:#9aa0b0">${s.en}</span></div>
-    <div class="cd-meta">${s.years} · ${s.field}</div><div class="cd-skill">✦ ${s.skill}</div><div class="cd-desc">${s.desc}</div><div class="cd-hint">${hint}</div></div>`;
+  const actionsHtml = isSelected
+    ? `<div class="cd-actions">
+        <button class="cd-btn primary" data-act="collapse" type="button">✓ 收起說明（保持選取）</button>
+        <button class="cd-btn cancel" data-act="cancel" type="button">✕ 取消選取</button>
+      </div>`
+    : `<div class="cd-actions">
+        <button class="cd-btn" data-act="collapse" type="button">✕ 關閉說明</button>
+      </div>`;
+
+  el.innerHTML = `<img src="${portraitUrl(id)}" alt="">
+    <div class="cd-body">
+      <div class="cd-top">
+        <div class="cd-name">${s.name} <span style="font-size:11px;color:#9aa0b0;font-weight:500">${s.years} · ${s.field}</span></div>
+      </div>
+      <div class="cd-skill">✦ ${s.skill} <span style="font-size:11px;color:#e8c46e;font-weight:500">${statusText}</span></div>
+      <div class="cd-desc">${s.desc}</div>
+      ${actionsHtml}
+    </div>`;
   show('#card-detail', true);
+  if (S.game) renderDeck();
 }
 
 $('#card-detail').addEventListener('click', e => {
   e.stopPropagation();
-  if (S.selected) { S.selected = null; refresh(); }
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'cancel') {
+    S.selected = null;
+    hideDetail();
+    refresh();
+    return;
+  }
+  // 點擊「收起說明」或說明框本身：僅隱藏說明框，保留已選取的科學家！
   hideDetail();
+});
+
+$('#btn-toggle-detail').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!S.selected) return;
+  if (S.detailId === S.selected) hideDetail();
+  else showDetail(S.selected, true);
+});
+
+$('#btn-cancel-select').addEventListener('click', e => {
+  e.stopPropagation();
+  S.selected = null;
+  hideDetail();
+  refresh();
 });
 
 function onCardClick(id) {
   const g = S.game, color = deckColor();
-  // 若已選取同一張卡，或正在釘選顯示同一張卡的說明 → 直接取消選取並隱藏說明
-  if (S.selected === id || (S.pinnedDetail && S.detailId === id)) {
+  // 若已選取同一張卡 → 再次點擊卡片本身即取消選取
+  if (S.selected === id) {
     S.selected = null;
     hideDetail();
     refresh();
@@ -164,10 +217,14 @@ function onCardClick(id) {
   }
   const usable = isMyTurn() && !S.busy && g && g.canUse(color, id) && g.validTargets(color, id).length > 0;
   if (!usable) {
-    // 即使目前不能發動，也能點開查看說明，再點一次或點畫面任意處即可關閉
-    S.selected = null;
-    showDetail(id, true);
-    refresh();
+    // 不可發動時（例如未滿第 5 手）：切換顯示或關閉該科學家的說明
+    if (S.pinnedDetail && S.detailId === id) {
+      hideDetail();
+    } else {
+      S.selected = null;
+      showDetail(id, true);
+      refresh();
+    }
     return;
   }
   S.selected = id;
@@ -376,10 +433,9 @@ view.onCellClick = cell => {
   submit(action);
 };
 view.onEmptyClick = () => {
-  if (S.selected || S.detailId) {
-    S.selected = null;
+  // 點擊棋盤空白處僅收起詳細說明框，保持已選取的科學家不變，方便玩家落子
+  if (S.detailId) {
     hideDetail();
-    refresh();
   }
 };
 

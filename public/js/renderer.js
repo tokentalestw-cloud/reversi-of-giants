@@ -69,38 +69,35 @@ export class BoardView {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x04050a);
-    this.scene.fog = new THREE.Fog(0x04050a, 20, 48);
+    this.scene.fog = new THREE.Fog(0x04050a, 30, 72);
     const pmrem = new THREE.PMREMGenerator(r);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.42;
 
     this.viewColor = BLACK;
     this.camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 300);
-    this.camera.position.set(0, 13, 9.5);
     this.controls = new OrbitControls(this.camera, r.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.enablePan = false;
     this.controls.zoomSpeed = 0.65;
-    this.controls.minDistance = 12.2;
-    this.controls.maxDistance = 19.5;
-    this.controls.minPolarAngle = 0.35;
+    this.controls.minPolarAngle = 0.28;
     this.controls.maxPolarAngle = 1.15;
-    this.controls.target.set(0, 0, 0.3);
+    this.setViewSide(BLACK, false);
     this.controls.addEventListener('start', () => { this._camTweenId = (this._camTweenId || 0) + 1; });
   }
 
   _initLights() {
     const s = this.scene;
     s.add(new THREE.HemisphereLight(0x8fa6ff, 0x1a1208, 0.32));
-    const spot = new THREE.SpotLight(0xfff0dc, 580, 40, 0.58, 0.7, 2);
+    const spot = new THREE.SpotLight(0xfff0dc, 580, 48, 0.58, 0.7, 2);
     spot.position.set(3, 16, 5);
     spot.target.position.set(0, 0, 0);
     spot.castShadow = true;
     spot.shadow.mapSize.set(2048, 2048);
     spot.shadow.bias = -0.0002;
     spot.shadow.normalBias = 0.02;
-    spot.shadow.camera.near = 5; spot.shadow.camera.far = 30;
+    spot.shadow.camera.near = 5; spot.shadow.camera.far = 42;
     s.add(spot, spot.target);
     const rim = new THREE.DirectionalLight(0x6c8cff, 0.75);
     rim.position.set(-8, 6, -10);
@@ -333,7 +330,7 @@ export class BoardView {
       if (!down) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       down = null;
-      if (moved > 8) return;
+      if (moved > 14) return;
       const c = cellAt(e);
       if (this.interactive && c >= 0 && this.highlightSet.has(c)) this.onCellClick?.(c);
       else this.onEmptyClick?.(c);
@@ -342,14 +339,17 @@ export class BoardView {
       if (cellAt(e) < 0) this.resetView(true);
     });
     el.addEventListener('pointermove', e => {
+      if (e.pointerType && e.pointerType !== 'mouse') return;
       const c = this.interactive ? cellAt(e) : -1;
       if (c !== this.hoverCell) { this.hoverCell = c; this._updateHover(); }
     });
     window.addEventListener('resize', () => {
       const w = window.innerWidth, h = window.innerHeight;
-      this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
-      this.renderer.setSize(w, h); this.composer.setSize(w, h);
+      this.camera.aspect = w / h;
+      this.renderer.setSize(w, h);
+      this.composer.setSize(w, h);
       this.effects.onResize();
+      this.setViewSide(this.viewColor, false);
     });
   }
 
@@ -739,10 +739,34 @@ export class BoardView {
     this.sfx?.hover();
   }
 
+  _getIdealView(color = this.viewColor) {
+    const w = window.innerWidth, h = Math.max(1, window.innerHeight);
+    const aspect = w / h;
+    const isPortrait = aspect < 0.95;
+    const fov = isPortrait ? THREE.MathUtils.clamp(42 + (0.95 - aspect) * 28, 42, 58) : 42;
+    this.camera.fov = fov;
+    this.camera.aspect = aspect;
+    this.camera.updateProjectionMatrix();
+
+    const halfTan = Math.tan(THREE.MathUtils.degToRad(fov * 0.5));
+    // 確保寬 10.0 的棋盤底座在手機直立螢幕左右完整呈現並保留舒適邊距（可視寬度 >= 10.8）
+    const minWDist = 10.8 / (2 * halfTan * Math.max(aspect, 0.36));
+    const dist = Math.max(15.84, minWDist);
+    this.controls.minDistance = dist * 0.78;
+    this.controls.maxDistance = dist * 1.22;
+
+    const sign = color === WHITE ? -1 : 1;
+    // 直立模式拉高俯角（讓 8x8 棋格更方正、手指更好點擊）
+    const elev = isPortrait ? 0.875 : 0.795;
+    const horiz = Math.sqrt(1 - elev * elev);
+    const target = new THREE.Vector3(0, dist * elev, sign * dist * horiz);
+    const tz = sign * (isPortrait ? 0.35 : 0.3);
+    return { target, tz, dist };
+  }
+
   setViewSide(color = this.viewColor, animate = true) {
     this.viewColor = color;
-    const target = new THREE.Vector3(0, 12.6, color === WHITE ? -9.6 : 9.6);
-    const tz = color === WHITE ? -0.3 : 0.3;
+    const { target, tz } = this._getIdealView(color);
     const id = (this._camTweenId = (this._camTweenId || 0) + 1);
     if (!animate) {
       this.camera.position.copy(target);
@@ -769,7 +793,9 @@ export class BoardView {
 
   introCamera(color) {
     this.viewColor = color;
-    this.camera.position.set(8, 17, color === WHITE ? -14 : 14);
+    const { dist } = this._getIdealView(color);
+    const scale = dist / 15.84;
+    this.camera.position.set(6 * scale, 16.5 * scale, (color === WHITE ? -13.5 : 13.5) * scale);
     return this.setViewSide(color, true);
   }
 
