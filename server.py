@@ -108,7 +108,21 @@ class WebSocket:
 
 
 # ---------------------------------------------------------------- 房間管理
-rooms = {}  # code -> {"players": {1: ws, 2: ws}, "rematch": set()}
+import time
+
+WAIT_TTL = 600.0   # 等待朋友加入時，即使房主切換 App 斷線，房間仍保留 10 分鐘
+GAME_TTL = 180.0   # 對局進行中若暫時切換畫面斷線，保留 3 分鐘等待自動重連
+
+# code -> {
+#   "tokens": {1: cid1, 2: cid2},
+#   "players": {1: ws_or_None, 2: ws_or_None},
+#   "started": False,
+#   "seed": int,
+#   "actions": list,
+#   "rematch": set(),
+#   "timer": asyncio.Task | None,
+# }
+rooms = {}
 
 
 def new_code():
@@ -119,17 +133,74 @@ def new_code():
             return code
 
 
-async def start_game(room):
-    seed = random.randint(1, 2**31 - 1)
-    for color, ws in room["players"].items():
-        await ws.send({"t": "start", "seed": seed, "color": color, "code": ws.room})
+def cancel_room_timer(room):
+    t = room.get("timer")
+    if t and not t.done():
+        t.cancel()
+    room["timer"] = None
 
 
-def other(room, ws):
-    for c, p in room["players"].items():
-        if p is not ws:
-            return p
-    return None
+def schedule_room_cleanup(code, delay, notify_left=False):
+    room = rooms.get(code)
+    if not room:
+        return
+    cancel_room_timer(room)
+
+    async def _job():
+        try:
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            return
+        r = rooms.get(code)
+        if not r:
+            return
+        active = {c: p for c, p in r["players"].items() if p is not None and not p.closed}
+        if notify_left and active:
+            for p in active.values():
+                await p.send({"t": "opponent_left"})
+        if not active or notify_left:
+            rooms.pop(code, None)
+            print(f"[房間] 逾時關閉 {code}")
+
+    room["timer"] = asyncio.create_task(_job())
+
+
+async def start_game(room, code):
+    room["started"] = True
+    room["seed"] = random.randint(1, 2**31 - 1)
+    room["actions"] = []
+    cancel_room_timer(room)
+    for color, ws in list(room["players"].items()):
+        if ws and not ws.closed:
+            await ws.send({
+                "t": "start",
+                "seed": room["seed"],
+                "color": color,
+                "code": code,
+                "actions": room["actions"],
+            })
+
+
+def other(room, color):
+    peer_color = 2 if color == 1 else 1
+    p = room["players"].get(peer_color)
+    return p if (p and not p.closed) else None
+
+
+async def leave_room_explicitly(ws: WebSocket):
+    code = ws.room
+    ws.room = None
+    if not code:
+        return
+    room = rooms.get(code)
+    if not room:
+        return
+    cancel_room_timer(room)
+    peer = other(room, ws.color)
+    if peer:
+        await peer.send({"t": "opponent_left"})
+    rooms.pop(code, None)
+    print(f"[房間] 玩家主動離開，關閉 {code}")
 
 
 async def ws_session(ws: WebSocket):
@@ -143,50 +214,115 @@ async def ws_session(ws: WebSocket):
             t = msg.get("t")
 
             if t == "create":
+                cid = str(msg.get("cid") or "") or new_code()
+                # 若該玩家剛建立過且尚未開局的房間還在，直接複用或清理舊房
                 code = new_code()
-                rooms[code] = {"players": {1: ws}, "rematch": set()}
+                rooms[code] = {
+                    "tokens": {1: cid},
+                    "players": {1: ws},
+                    "started": False,
+                    "seed": random.randint(1, 2**31 - 1),
+                    "actions": [],
+                    "rematch": set(),
+                    "timer": None,
+                }
                 ws.room, ws.color = code, 1
                 await ws.send({"t": "created", "code": code})
-                print(f"[房間] 建立 {code}")
+                print(f"[房間] 建立 {code} (cid={cid[:8]})")
 
-            elif t == "join":
+            elif t in ("join", "rejoin"):
                 code = str(msg.get("code", "")).upper().strip()
+                cid = str(msg.get("cid") or "")
                 room = rooms.get(code)
                 if not room:
-                    await ws.send({"t": "error", "msg": "找不到這個房間代碼"})
+                    await ws.send({"t": "error", "msg": "找不到這個房間代碼（可能已逾時關閉）"})
                     continue
-                if len(room["players"]) >= 2:
+
+                # 1. 檢查是否為原房主或原玩家重連（例如切換去 LINE 貼連結後切回瀏覽器）
+                my_color = None
+                for c, tok in room["tokens"].items():
+                    if cid and tok == cid:
+                        my_color = c
+                        break
+
+                if my_color is not None:
+                    old_ws = room["players"].get(my_color)
+                    if old_ws and old_ws is not ws and not old_ws.closed:
+                        old_ws.room = None
+                    room["players"][my_color] = ws
+                    ws.room, ws.color = code, my_color
+                    cancel_room_timer(room)
+                    if not room["started"]:
+                        await ws.send({"t": "created", "code": code})
+                        print(f"[房間] {code} 房主返回等待畫面")
+                    else:
+                        await ws.send({
+                            "t": "sync",
+                            "seed": room["seed"],
+                            "color": my_color,
+                            "code": code,
+                            "actions": room["actions"],
+                        })
+                        peer = other(room, my_color)
+                        if peer:
+                            await peer.send({"t": "opponent_status", "online": True})
+                        print(f"[房間] {code} 玩家 {my_color} 重連成功")
+                    continue
+
+                # 2. 新玩家加入房間
+                if len(room["tokens"]) >= 2:
                     await ws.send({"t": "error", "msg": "房間已滿"})
                     continue
-                color = 2 if 1 in room["players"] else 1
+
+                color = 2 if 1 in room["tokens"] else 1
+                room["tokens"][color] = cid or new_code()
                 room["players"][color] = ws
                 ws.room, ws.color = code, color
                 print(f"[房間] {code} 對手加入，開始對局")
-                await start_game(room)
+                await start_game(room, code)
+                # 若房主此時仍在 LINE 等外部 App 尚未切回，啟動對局保留計時器等待房主切回
+                if not other(room, color):
+                    schedule_room_cleanup(code, WAIT_TTL, notify_left=True)
 
-            elif t in ("action", "chat", "emote"):
+            elif t == "action":
+                room = rooms.get(ws.room)
+                if room and room["started"]:
+                    ply = msg.get("ply")
+                    if ply == len(room["actions"]):
+                        room["actions"].append(msg.get("action"))
+                    peer = other(room, ws.color)
+                    if peer:
+                        await peer.send(msg)
+
+            elif t in ("chat", "emote"):
                 room = rooms.get(ws.room)
                 if room:
-                    peer = other(room, ws)
+                    peer = other(room, ws.color)
                     if peer:
                         await peer.send(msg)
 
             elif t == "rematch":
                 room = rooms.get(ws.room)
-                if not room or len(room["players"]) < 2:
+                if not room or len(room["tokens"]) < 2:
                     continue
                 room["rematch"].add(ws.color)
-                peer = other(room, ws)
+                peer = other(room, ws.color)
                 if len(room["rematch"]) >= 2:
                     room["rematch"].clear()
                     # 交換先後手
                     p = room["players"]
-                    p[1], p[2] = p[2], p[1]
+                    tok = room["tokens"]
+                    p[1], p[2] = p.get(2), p.get(1)
+                    tok[1], tok[2] = tok.get(2), tok.get(1)
                     for c, s in p.items():
-                        s.color = c
-                    await start_game(room)
+                        if s:
+                            s.color = c
+                    await start_game(room, ws.room)
                 elif peer:
                     await peer.send({"t": "rematch_request"})
+
+            elif t == "leave":
+                await leave_room_explicitly(ws)
 
             elif t == "ping":
                 await ws.send({"t": "pong"})
@@ -194,14 +330,21 @@ async def ws_session(ws: WebSocket):
         pass
     finally:
         ws.closed = True
-        room = rooms.get(ws.room) if ws.room else None
+        code = ws.room
+        room = rooms.get(code) if code else None
         if room:
-            room["players"] = {c: p for c, p in room["players"].items() if p is not ws}
-            for p in room["players"].values():
-                await p.send({"t": "opponent_left"})
-            if not room["players"]:
-                rooms.pop(ws.room, None)
-                print(f"[房間] 關閉 {ws.room}")
+            if room["players"].get(ws.color) is ws:
+                room["players"][ws.color] = None
+            if not room["started"]:
+                # 房主在等待畫面切換去 LINE 分享代碼：保留房間 10 分鐘！
+                print(f"[房間] {code} 房主暫時離開畫面，保留房間 {int(WAIT_TTL)} 秒")
+                schedule_room_cleanup(code, WAIT_TTL, notify_left=False)
+            else:
+                peer = other(room, ws.color)
+                if peer:
+                    await peer.send({"t": "opponent_status", "online": False})
+                print(f"[房間] {code} 玩家 {ws.color} 暫時斷線，保留對局 {int(GAME_TTL)} 秒")
+                schedule_room_cleanup(code, GAME_TTL, notify_left=True)
 
 
 # ---------------------------------------------------------------- HTTP

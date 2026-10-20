@@ -410,7 +410,32 @@ async function goOnline(joinCode = null) {
     show('#lobby', false); show('#waiting', true);
   })
     .on('start', m => { S.code = m.code; startGame('online', m.seed, m.color); })
+    .on('sync', m => {
+      S.code = m.code;
+      const actions = m.actions || [];
+      if (S.mode !== 'online' || !S.game || S.game.seed !== m.seed) {
+        startGame('online', m.seed, m.color);
+        for (let i = 0; i < actions.length; i++) {
+          if (i < actions.length - 1) {
+            try { S.game.apply(actions[i]); } catch {}
+          } else {
+            enqueue(actions[i]);
+          }
+        }
+        view.sync(S.game);
+        refresh();
+      } else if (actions.length > S.game.ply) {
+        for (let i = S.game.ply; i < actions.length; i++) {
+          enqueue(actions[i]);
+        }
+      }
+    })
     .on('action', m => { if (S.mode === 'online') enqueue(m.action); })
+    .on('opponent_status', m => {
+      if (S.mode === 'online' && S.game && !S.game.over) {
+        toast(m.online ? '✅ 對手已回到畫面' : '⏳ 對手暫時切換畫面，等待返回中…');
+      }
+    })
     .on('error', m => { toast(m.msg, true); toLobby(); })
     .on('rematch_request', () => { toast('對手想再來一局！'); $('#btn-rematch').textContent = '接受再戰'; })
     .on('opponent_left', () => {
@@ -419,7 +444,12 @@ async function goOnline(joinCode = null) {
       $('#btn-rematch').disabled = true;
       show('#gameover', true);
     })
-    .on('close', () => { if (S.mode === 'online' || !$('#waiting').classList.contains('hidden')) { toast('與伺服器的連線中斷', true); toLobby(); } });
+    .on('close', () => {
+      if (!net.roomCode && (S.mode === 'online' || !$('#waiting').classList.contains('hidden'))) {
+        toast('與伺服器的連線中斷', true);
+        toLobby();
+      }
+    });
   try {
     await net.connect();
   } catch (e) { toast(e.message, true); S.net = null; return; }
@@ -450,9 +480,36 @@ $('#join-code').addEventListener('keydown', e => { if (e.key === 'Enter') $('#bt
 $('#btn-local').onclick = () => { sfx.unlock(); startGame('local', randSeed()); };
 $('#btn-ai').onclick = () => { sfx.unlock(); startGame('ai', randSeed(), BLACK); };
 $('#btn-cancel-wait').onclick = toLobby;
-$('#btn-copy').onclick = async () => {
-  try { await navigator.clipboard.writeText($('#share-link').value); toast('已複製連結'); }
-  catch { $('#share-link').select(); document.execCommand('copy'); toast('已複製連結'); }
+
+async function copyText(txt, okMsg) {
+  try {
+    await navigator.clipboard.writeText(txt);
+    toast(okMsg);
+  } catch {
+    const inp = $('#share-link');
+    const prev = inp.value;
+    inp.value = txt;
+    inp.select();
+    document.execCommand('copy');
+    inp.value = prev;
+    toast(okMsg);
+  }
+}
+
+$('#btn-copy').onclick = () => copyText($('#share-link').value, '🔗 已複製邀請連結！直接貼給朋友即可加入');
+$('#btn-copy-code').onclick = () => copyText(S.code || $('#room-code').textContent, `📋 已複製房間代碼：${S.code}`);
+$('#btn-share').onclick = async () => {
+  const url = $('#share-link').value;
+  const text = `快來跟我對戰《科學巨人黑白棋》！房間代碼：${S.code}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: '科學巨人黑白棋', text, url });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+  await copyText(`${text}\n${url}`, '📤 已複製邀請訊息與連結！去 LINE 貼上即可');
 };
 $('#pass-btn').onclick = () => submit({ type: 'pass' });
 $('#btn-rematch').onclick = () => {

@@ -127,14 +127,20 @@
   <div id="waiting" class="overlay hidden">
     <div class="modal">
       <div class="m-title">等待對手加入…</div>
-      <div class="m-sub">把房間代碼或連結分享給朋友</div>
+      <div class="m-sub">切換去 LINE 傳訊時，房間會自動保留 10 分鐘</div>
       <div class="room-code" id="room-code">----</div>
-      <div class="share-row">
-        <input id="share-link" readonly />
-        <button class="btn" id="btn-copy">複製連結</button>
+      <div class="lobby-actions" style="gap:10px">
+        <button class="btn gold" id="btn-share">📤 一鍵分享給朋友（LINE / 訊息）</button>
+        <div class="row2">
+          <button class="btn" id="btn-copy-code">📋 複製 4 碼代碼</button>
+          <button class="btn" id="btn-copy">🔗 複製邀請連結</button>
+        </div>
+        <div class="share-row">
+          <input id="share-link" readonly />
+        </div>
       </div>
       <div class="spinner"></div>
-      <button class="btn ghost" id="btn-cancel-wait">取消</button>
+      <button class="btn ghost" id="btn-cancel-wait">取消房間</button>
     </div>
   </div>
 
