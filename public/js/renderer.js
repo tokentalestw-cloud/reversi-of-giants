@@ -63,7 +63,7 @@ export class BoardView {
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.05;
+    r.toneMappingExposure = 0.92;
     r.outputColorSpace = THREE.SRGBColorSpace;
     this.container.appendChild(r.domElement);
 
@@ -72,24 +72,28 @@ export class BoardView {
     this.scene.fog = new THREE.Fog(0x04050a, 20, 48);
     const pmrem = new THREE.PMREMGenerator(r);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.55;
+    this.scene.environmentIntensity = 0.42;
 
+    this.viewColor = BLACK;
     this.camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 300);
     this.camera.position.set(0, 13, 9.5);
     this.controls = new OrbitControls(this.camera, r.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.enablePan = false;
-    this.controls.minDistance = 8;
-    this.controls.maxDistance = 24;
-    this.controls.maxPolarAngle = 1.2;
+    this.controls.zoomSpeed = 0.65;
+    this.controls.minDistance = 12.2;
+    this.controls.maxDistance = 19.5;
+    this.controls.minPolarAngle = 0.35;
+    this.controls.maxPolarAngle = 1.15;
     this.controls.target.set(0, 0, 0.3);
+    this.controls.addEventListener('start', () => { this._camTweenId = (this._camTweenId || 0) + 1; });
   }
 
   _initLights() {
     const s = this.scene;
-    s.add(new THREE.HemisphereLight(0x8fa6ff, 0x1a1208, 0.35));
-    const spot = new THREE.SpotLight(0xfff0dc, 900, 40, 0.55, 0.65, 2);
+    s.add(new THREE.HemisphereLight(0x8fa6ff, 0x1a1208, 0.32));
+    const spot = new THREE.SpotLight(0xfff0dc, 580, 40, 0.58, 0.7, 2);
     spot.position.set(3, 16, 5);
     spot.target.position.set(0, 0, 0);
     spot.castShadow = true;
@@ -98,10 +102,10 @@ export class BoardView {
     spot.shadow.normalBias = 0.02;
     spot.shadow.camera.near = 5; spot.shadow.camera.far = 30;
     s.add(spot, spot.target);
-    const rim = new THREE.DirectionalLight(0x6c8cff, 0.9);
+    const rim = new THREE.DirectionalLight(0x6c8cff, 0.75);
     rim.position.set(-8, 6, -10);
     s.add(rim);
-    const warm = new THREE.PointLight(0xff9a50, 40, 30, 2);
+    const warm = new THREE.PointLight(0xff9a50, 32, 30, 2);
     warm.position.set(9, 3, 8);
     s.add(warm);
   }
@@ -290,8 +294,9 @@ export class BoardView {
     this.geoSeam = new THREE.TorusGeometry(R + 0.001, 0.007, 6, 72).rotateX(Math.PI / 2);
     this.geoMark = new THREE.TorusGeometry(R + 0.012, 0.016, 8, 72).rotateX(Math.PI / 2);
     this.geoGroove = new THREE.TorusGeometry(0.311, 0.01, 6, 64).rotateX(Math.PI / 2);
-    this.matBlack = new THREE.MeshPhysicalMaterial({ color: 0x0a0a0d, roughness: 0.2, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.03 });
-    this.matWhite = new THREE.MeshPhysicalMaterial({ color: 0xf3efe4, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.05, iridescence: 0.35, iridescenceIOR: 1.3, sheen: 0.4, sheenColor: new THREE.Color(0xffffff) });
+    this.matBlack = new THREE.MeshPhysicalMaterial({ color: 0x0d0e12, roughness: 0.25, metalness: 0.08, clearcoat: 0.85, clearcoatRoughness: 0.06 });
+    // 柔和溫潤的骨瓷／暖灰象牙色，避免高光過曝刺眼
+    this.matWhite = new THREE.MeshPhysicalMaterial({ color: 0xa39d90, roughness: 0.52, metalness: 0.05, clearcoat: 0.2, clearcoatRoughness: 0.38 });
     const ghost = m => { const g = m.clone(); g.transparent = true; g.opacity = 0.42; g.depthWrite = false; return g; };
     this.ghostMats = { black: ghost(this.matBlack), white: ghost(this.matWhite) };
     this.markMats = {};
@@ -305,7 +310,8 @@ export class BoardView {
     const w = window.innerWidth, h = window.innerHeight;
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.45, 0.88);
+    // 提高閾值至 1.12，讓特效發光而白子與棋盤絕不過曝發亮
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.4, 0.4, 1.12);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
   }
@@ -327,9 +333,13 @@ export class BoardView {
       if (!down) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       down = null;
-      if (moved > 6 || !this.interactive) return;
+      if (moved > 8) return;
       const c = cellAt(e);
-      if (c >= 0 && this.highlightSet.has(c)) this.onCellClick?.(c);
+      if (this.interactive && c >= 0 && this.highlightSet.has(c)) this.onCellClick?.(c);
+      else this.onEmptyClick?.(c);
+    });
+    el.addEventListener('dblclick', e => {
+      if (cellAt(e) < 0) this.resetView(true);
     });
     el.addEventListener('pointermove', e => {
       const c = this.interactive ? cellAt(e) : -1;
@@ -665,6 +675,9 @@ export class BoardView {
   }
 
   reset() {
+    this.tweens = [];
+    this.timeScale = 1;
+    this._camTweenId = (this._camTweenId || 0) + 1;
     for (let i = 0; i < 64; i++) this._removePiece(i);
     for (const g of this.voids.values()) this.scene.remove(g);
     this.voids.clear();
@@ -726,25 +739,38 @@ export class BoardView {
     this.sfx?.hover();
   }
 
-  setViewSide(color, animate = true) {
-    const target = new THREE.Vector3(0, 13, color === WHITE ? -9.5 : 9.5);
+  setViewSide(color = this.viewColor, animate = true) {
+    this.viewColor = color;
+    const target = new THREE.Vector3(0, 12.6, color === WHITE ? -9.6 : 9.6);
     const tz = color === WHITE ? -0.3 : 0.3;
-    if (!animate) { this.camera.position.copy(target); this.controls.target.set(0, 0, tz); return; }
+    const id = (this._camTweenId = (this._camTweenId || 0) + 1);
+    if (!animate) {
+      this.camera.position.copy(target);
+      this.controls.target.set(0, 0, tz);
+      this.controls.update();
+      return Promise.resolve();
+    }
     const from = this.camera.position.clone(), t0 = this.controls.target.clone();
     const sph0 = new THREE.Spherical().setFromVector3(from), sph1 = new THREE.Spherical().setFromVector3(target);
     let dTheta = sph1.theta - sph0.theta;
     if (dTheta > Math.PI) dTheta -= Math.PI * 2;
     if (dTheta < -Math.PI) dTheta += Math.PI * 2;
-    return this.tween(2.2, k => {
+    return this.tween(0.95, k => {
+      if (this._camTweenId !== id) return;
       const s = new THREE.Spherical(sph0.radius + (sph1.radius - sph0.radius) * k, sph0.phi + (sph1.phi - sph0.phi) * k, sph0.theta + dTheta * k);
       this.camera.position.setFromSpherical(s);
       this.controls.target.set(0, 0, t0.z + (tz - t0.z) * k);
     }, easeInOutCubic);
   }
 
+  resetView(animate = true) {
+    return this.setViewSide(this.viewColor, animate);
+  }
+
   introCamera(color) {
-    this.camera.position.set(14, 22, color === WHITE ? -20 : 20);
-    return this.setViewSide(color);
+    this.viewColor = color;
+    this.camera.position.set(8, 17, color === WHITE ? -14 : 14);
+    return this.setViewSide(color, true);
   }
 
   // ================================================================ 主迴圈

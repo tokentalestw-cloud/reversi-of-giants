@@ -98,7 +98,7 @@ function renderHUD() {
 function renderDeck() {
   const g = S.game, color = deckColor();
   const canAct = isMyTurn() && !S.busy;
-  $('#deck-sub').textContent = g.ply < UNLOCK_PLY ? `科學家將於第 ${UNLOCK_PLY + 1} 手解鎖` : `${colorName(color)} 剩餘 ${g.charges[color]} 次 · 每位科學家每局限用 1 次`;
+  $('#deck-sub').textContent = g.ply < UNLOCK_PLY ? `科學家將於第 ${UNLOCK_PLY + 1} 手解鎖（點擊卡片可查看說明）` : `${colorName(color)} 剩餘 ${g.charges[color]} 次 · 每位科學家每局限用 1 次`;
   const wrap = $('#cards');
   if (!wrap.children.length) {
     for (const s of SCIENTISTS) {
@@ -108,9 +108,9 @@ function renderDeck() {
       d.style.setProperty('--c', s.color);
       const type = { legal: '落子', empty: '任意格', enemy: '敵子' }[s.target];
       d.innerHTML = `<img src="${portraitUrl(s.id)}" alt=""><div class="c-type">${type}</div><div class="c-name">${s.short}</div><div class="c-skill">${s.skill}</div><div class="c-used">已使用</div>`;
-      d.addEventListener('click', () => onCardClick(s.id));
-      d.addEventListener('mouseenter', () => showDetail(s.id));
-      d.addEventListener('mouseleave', () => show('#card-detail', false));
+      d.addEventListener('click', e => { e.stopPropagation(); onCardClick(s.id); });
+      d.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && !S.selected) showDetail(s.id); });
+      d.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !S.selected && !S.pinnedDetail) hideDetail(); });
       wrap.appendChild(d);
     }
   }
@@ -124,19 +124,54 @@ function renderDeck() {
   }
 }
 
-function showDetail(id) {
+function hideDetail() {
+  S.detailId = null;
+  S.pinnedDetail = false;
+  show('#card-detail', false);
+}
+
+function showDetail(id, pinned = false) {
   const s = getScientist(id), el = $('#card-detail');
+  S.detailId = id;
+  if (pinned) S.pinnedDetail = true;
   el.style.setProperty('--c', s.color);
-  el.innerHTML = `<img src="${portraitUrl(id)}" alt=""><div><div class="cd-name">${s.name} <span style="font-size:12px;color:#9aa0b0">${s.en}</span></div>
-    <div class="cd-meta">${s.years} · ${s.field}</div><div class="cd-skill">✦ ${s.skill}</div><div class="cd-desc">${s.desc}</div></div>`;
+  const g = S.game, color = deckColor();
+  let hint = '點擊說明框、再點一次卡片或按 ✕ 即可關閉說明';
+  if (g) {
+    if (S.selected === id) hint = '✦ 已選取：請點擊棋盤上的標示格發動（再點一次卡片或按 ✕ 取消）';
+    else if (g.used[color].includes(id)) hint = '此科學家本局已使用過（點擊關閉說明）';
+    else if (g.ply < UNLOCK_PLY) hint = `將於第 ${UNLOCK_PLY + 1} 手解鎖使用（點擊關閉說明）`;
+  }
+  el.innerHTML = `<button class="cd-close" title="關閉說明">✕</button><img src="${portraitUrl(id)}" alt=""><div><div class="cd-name">${s.name} <span style="font-size:12px;color:#9aa0b0">${s.en}</span></div>
+    <div class="cd-meta">${s.years} · ${s.field}</div><div class="cd-skill">✦ ${s.skill}</div><div class="cd-desc">${s.desc}</div><div class="cd-hint">${hint}</div></div>`;
   show('#card-detail', true);
 }
 
+$('#card-detail').addEventListener('click', e => {
+  e.stopPropagation();
+  if (S.selected) { S.selected = null; refresh(); }
+  hideDetail();
+});
+
 function onCardClick(id) {
   const g = S.game, color = deckColor();
-  if (!isMyTurn() || S.busy) { sfx.error(); return; }
-  if (!g.canUse(color, id) || !g.validTargets(color, id).length) { sfx.error(); toast('目前無法使用這位科學家', true); return; }
-  S.selected = S.selected === id ? null : id;
+  // 若已選取同一張卡，或正在釘選顯示同一張卡的說明 → 直接取消選取並隱藏說明
+  if (S.selected === id || (S.pinnedDetail && S.detailId === id)) {
+    S.selected = null;
+    hideDetail();
+    refresh();
+    return;
+  }
+  const usable = isMyTurn() && !S.busy && g && g.canUse(color, id) && g.validTargets(color, id).length > 0;
+  if (!usable) {
+    // 即使目前不能發動，也能點開查看說明，再點一次或點畫面任意處即可關閉
+    S.selected = null;
+    showDetail(id, true);
+    refresh();
+    return;
+  }
+  S.selected = id;
+  showDetail(id, true);
   sfx.select();
   refresh();
 }
@@ -175,6 +210,7 @@ function submit(action) {
   try { S.game.clone().apply(action); } catch (e) { toast(e.message, true); sfx.error(); return; }
   if (S.mode === 'online') S.net.send({ t: 'action', action, ply: S.game.ply });
   S.selected = null;
+  hideDetail();
   enqueue(action);
 }
 
@@ -268,13 +304,15 @@ function startGame(mode, seed, myColor = BLACK) {
   S.myColor = myColor;
   S.aiColor = mode === 'ai' ? opp(myColor) : null;
   S.selected = null;
+  hideDetail();
   S.busy = false;
   S.chain = Promise.resolve();
   view.controls.autoRotate = false;
+  view.controls.enabled = true;
   view.reset();
   view.sync(S.game);
   view.introCamera(mode === 'online' ? myColor : BLACK);
-  ['#lobby', '#waiting', '#gameover'].forEach(id => show(id, false));
+  ['#lobby', '#waiting', '#gameover', '#rules'].forEach(id => show(id, false));
   ['#hud', '#deck', '#log', '#topbar'].forEach(id => show(id, true));
   show('#room-badge', mode === 'online');
   if (mode === 'online') $('#room-badge').textContent = `房間 ${S.code}`;
@@ -288,11 +326,14 @@ function startGame(mode, seed, myColor = BLACK) {
 function toLobby() {
   S.token++;
   S.mode = null;
+  S.selected = null;
+  hideDetail();
   if (S.net) { S.net.close(); S.net = null; }
-  ['#hud', '#deck', '#log', '#topbar', '#waiting', '#gameover', '#pass-btn'].forEach(id => show(id, false));
+  ['#hud', '#deck', '#log', '#topbar', '#waiting', '#gameover', '#pass-btn', '#rules'].forEach(id => show(id, false));
   show('#lobby', true);
   view.interactive = false;
   view.setHighlights([], '#fff');
+  view.controls.enabled = true;
   view.controls.autoRotate = true;
   view.controls.autoRotateSpeed = 0.5;
   history.replaceState(null, '', location.pathname);
@@ -334,6 +375,13 @@ view.onCellClick = cell => {
   if (S.selected) action.ability = S.selected;
   submit(action);
 };
+view.onEmptyClick = () => {
+  if (S.selected || S.detailId) {
+    S.selected = null;
+    hideDetail();
+    refresh();
+  }
+};
 
 $('#btn-create').onclick = () => goOnline();
 $('#btn-join').onclick = () => {
@@ -361,27 +409,53 @@ $('#btn-rematch').onclick = () => {
 $('#btn-tolobby').onclick = toLobby;
 $('#btn-leave').onclick = () => { if (confirm('確定要離開這場對局嗎？')) toLobby(); };
 $('#btn-sound').onclick = () => { sfx.enabled = !sfx.enabled; $('#btn-sound').textContent = sfx.enabled ? '🔊' : '🔇'; };
-const openRules = () => show('#rules', true);
-$('#btn-rules').onclick = openRules;
-$('#btn-rules2').onclick = openRules;
-$('#btn-close-rules').onclick = () => show('#rules', false);
-$('#rules').addEventListener('click', e => { if (e.target.id === 'rules') show('#rules', false); });
+$('#btn-cam').onclick = () => { view.resetView(true); toast('🎥 已重置視角'); };
+
+function toggleRules(open) {
+  const isOpen = !$('#rules').classList.contains('hidden');
+  const next = open === undefined ? !isOpen : open;
+  show('#rules', next);
+  view.controls.enabled = !next;
+}
+$('#btn-rules').onclick = () => toggleRules();
+$('#btn-rules2').onclick = () => toggleRules(true);
+$('#btn-close-rules').onclick = () => toggleRules(false);
+$('#btn-close-rules-bottom').onclick = () => toggleRules(false);
+$('#rules').addEventListener('click', e => {
+  if (e.target.id === 'rules') toggleRules(false);
+});
+
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (!$('#rules').classList.contains('hidden')) show('#rules', false);
-    else if (S.selected) { S.selected = null; refresh(); }
+    if (!$('#rules').classList.contains('hidden')) toggleRules(false);
+    else if (S.selected || S.detailId) { S.selected = null; hideDetail(); refresh(); }
+  }
+  if ((e.key === 'r' || e.key === 'R') && S.mode && document.activeElement.tagName !== 'INPUT') {
+    view.resetView(true);
+    toast('🎥 已重置視角');
   }
   if (S.mode && S.game && /^[1-9]$/.test(e.key) && document.activeElement.tagName !== 'INPUT') onCardClick(SCIENTISTS[+e.key - 1].id);
 });
 
+// 防止觸控板雙指縮放把整個瀏覽器頁面放大而卡住
+window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+window.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
+window.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+
 // 圖鑑 & 大廳頭像
 $('#gallery').innerHTML = SCIENTISTS.map(s => `
-  <div class="g-item" style="--c:${s.color}">
-    <img src="${portraitUrl(s.id)}" alt="">
+  <div class="g-item" id="gal-${s.id}" style="--c:${s.color}">
+    <img src="${portraitUrl(s.id)}" alt="" loading="lazy">
     <div><div class="g-name">${s.name}</div><div class="g-meta">${s.en} · ${s.years} · ${s.field}</div>
     <div class="g-skill">✦ ${s.skill}</div><div class="g-desc">${s.desc}</div></div>
   </div>`).join('');
-$('#lobby-portraits').innerHTML = SCIENTISTS.map(s => `<img src="${portraitUrl(s.id)}" title="${s.name}・${s.skill}" style="border-color:${s.color}">`).join('');
+$('#lobby-portraits').innerHTML = SCIENTISTS.map(s => `<img src="${portraitUrl(s.id)}" data-id="${s.id}" title="點擊查看：${s.name}・${s.skill}" style="border-color:${s.color}">`).join('');
+$('#lobby-portraits').addEventListener('click', e => {
+  const id = e.target.dataset?.id;
+  if (!id) return;
+  toggleRules(true);
+  document.getElementById(`gal-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
 
 // 初始畫面
 const demo = new Game(1);

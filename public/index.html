@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>科學巨人黑白棋 · Reversi of Giants</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -45,6 +45,7 @@
 
   <div id="topbar" class="hidden">
     <div id="room-badge" class="hidden"></div>
+    <button class="icon-btn" id="btn-cam" title="重置視角 (R)">🎥</button>
     <button class="icon-btn" id="btn-rules" title="規則與圖鑑">📖</button>
     <button class="icon-btn" id="btn-sound" title="音效">🔊</button>
     <button class="icon-btn" id="btn-leave" title="離開對局">⏏</button>
@@ -135,18 +136,24 @@
   <!-- 規則 / 圖鑑 -->
   <div id="rules" class="overlay hidden">
     <div class="modal wide">
-      <button class="close-x" id="btn-close-rules">✕</button>
-      <div class="m-title">遊戲規則</div>
+      <div class="modal-head">
+        <div class="m-title" style="margin:0">遊戲規則與科學家圖鑑</div>
+        <button class="close-x" id="btn-close-rules" title="關閉 (Esc)">✕ 關閉</button>
+      </div>
       <ul class="rules-list">
         <li>基本規則同傳統黑白棋：落子必須夾住對手棋子，被夾住的棋子翻面。黑方先手。</li>
         <li>每位玩家每局可使用 <b>3 次</b> 科學家棋子，每位科學家每局限用 1 次；<b>第 5 手起</b>才能召喚科學家。</li>
         <li><b>最後防線</b>：科學家的效果不會吃光對手最後一枚棋子（一般夾擊不受此限）。</li>
-        <li>在下方牌組點選科學家後，棋盤會以該科學家的顏色標示可選位置。再點一次卡片可取消。</li>
+        <li>在下方牌組點選科學家後，棋盤會以該科學家的顏色標示可選位置。再點一次卡片或按 ✕ 可取消。</li>
         <li>若沒有合法位置但仍有可用的「任意空格／敵子」型科學家，可選擇使用或跳過回合；雙方皆無法行動時對局結束，棋子多者勝。</li>
         <li>帶有彩色光環的棋子代表由科學家放置。黑洞格永久無法落子，並會阻斷夾擊連線。</li>
+        <li>若視角偏移或縮放過大，可隨時點擊右上角 <b>🎥 重置視角</b>（或按鍵盤 <b>R</b> 鍵）恢復預設角度。</li>
       </ul>
-      <div class="m-title small">科學家圖鑑</div>
+      <div class="m-title small">科學家圖鑑（點擊卡片外任意處也可關閉）</div>
       <div class="gallery" id="gallery"></div>
+      <div style="text-align:center;margin-top:20px">
+        <button class="btn gold" id="btn-close-rules-bottom">關閉說明</button>
+      </div>
     </div>
   </div>
 
