@@ -77,4 +77,4 @@ export const SCIENTISTS = [
 
 const MAP = Object.fromEntries(SCIENTISTS.map(s => [s.id, s]));
 export const getScientist = id => MAP[id];
-export const portraitUrl = id => `assets/portraits/${id}.jpg`;
+export const portraitUrl = id => `assets/portraits/${id}.jpg?v=2`;
