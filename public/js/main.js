@@ -323,6 +323,7 @@ function logResult(res) {
     if (res.ability === 'mabaoguo') extra = `五連鞭連擊，共翻轉 ${flipped} 子`;
     if (res.ability === 'trump') extra = `徵收關稅並築起金色高牆，共翻轉 ${flipped} 子`;
     if (res.ability === 'liuzhenren') extra = `降下真情天罰審判負心棋子，共翻轉 ${flipped} 子`;
+    if (res.ability === 'guozhenren') extra = `資工博士衝第一線護駕並架起防火牆，共翻轉 ${flipped} 子`;
     log(`${who} 召喚 <b>${s.short}・${s.skill}</b> 於 ${where}${extra ? '，' + extra : ''}`, s.color);
   } else {
     log(`${who} 落子 ${where}，翻轉 ${flipped} 子`, pc);

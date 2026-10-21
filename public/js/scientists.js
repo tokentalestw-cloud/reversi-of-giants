@@ -73,8 +73,14 @@ export const SCIENTISTS = [
     desc: '真情男子漢，專門降天罰處罰對感情不忠的負心漢！一般落子後降下「真情・專情・用心・負責」四道九天雷罰，審判場上曾變心翻面過或左擁右抱的不忠敵子（最多 4 枚）劈回己方，且自身堅守專情護盾 2 回合絕不變心！',
     quote: '真情、專情、用心、負責！凡對感情不忠的負心漢，必降天罰！',
   },
+  {
+    id: 'guozhenren', name: '郭真人', short: '郭真人', en: 'Dr. Guo Zhenren (CS Ph.D.)', years: '劉真人首徒・資工博士',
+    field: '資工博士・真情門下護法', skill: '資工護駕', target: 'legal', color: '#00e5ff',
+    desc: '劉真人的得意弟子，隨師父修行真情男子漢之道，學識淵博的資工博士！任何人敢對劉真人不敬，他必定衝第一個護駕：一般落子後啟動「博士演算法」，優先駭入並制裁威脅劉真人與己方陣營的不敬敵子（最多 3 枚）翻轉為己方，同時為場上劉真人、自身與周圍己方棋子架起 2 回合「資工防火牆」護盾！',
+    quote: '敢對師父劉真人不敬？問過我的演算法沒有！弟子衝第一個護駕！',
+  },
 ];
 
 const MAP = Object.fromEntries(SCIENTISTS.map(s => [s.id, s]));
 export const getScientist = id => MAP[id];
-export const portraitUrl = id => `assets/portraits/${id}.jpg?v=2`;
+export const portraitUrl = id => `assets/portraits/${id}.jpg?v=3`;

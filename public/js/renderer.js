@@ -641,6 +641,13 @@ export class BoardView {
           await this.wait(0.85);
           break;
 
+        case 'guoguard':
+          this.sfx?.ability('guozhenren');
+          this.effects.guoGuard(pos, st.cells.map(c => cellPos(c)), fx);
+          this.shake(0.2);
+          await this.wait(0.8);
+          break;
+
         default: break;
       }
     }

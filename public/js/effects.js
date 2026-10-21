@@ -18,6 +18,7 @@ export class Effects {
     this._whipTex = ['閃', '電', '五', '連', '鞭'].map(ch => this._textTexture(ch, '#ffe14d'));
     this._trumpTex = ['$', '稅', 'WIN'].map(ch => this._textTexture(ch, '#ff9d2e'));
     this._liuTex = ['真情', '專情', '用心', '負責', '天罰'].map(ch => this._textTexture(ch, '#ff3864'));
+    this._guoTex = ['護駕', '資工', '博士', '忠誠'].map(ch => this._textTexture(ch, '#00e5ff'));
   }
 
   // ------------------------------------------------------------ 粒子
@@ -599,6 +600,53 @@ export class Effects {
           const k = t / 0.85;
           if (k >= 1) return false;
           sp.position.y = 0.75 + k * 0.95;
+          sp.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+        });
+      }, delay * 1000);
+    });
+  }
+
+  /** 郭真人：資工護駕（青金演算法防護穹頂 + 0/1 駭客矩陣雷射衝鋒制裁 + 「護駕・資工・博士・忠誠」道印） */
+  guoGuard(pos, targets, color = '#00e5ff', dur = 1.3) {
+    // 落點展開資工防火牆穹頂與「護駕」大印
+    this.cage(pos, color, 1.55, 1.15);
+    this.binary(pos, 1.0);
+
+    const guardSeal = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this._guoTex[0], transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(1.6, 2.3, 2.5),
+    }));
+    guardSeal.position.set(pos.x, 1.35, pos.z);
+    guardSeal.scale.setScalar(1.05);
+    this.add(guardSeal, t => {
+      const k = t / dur;
+      if (k >= 1) return false;
+      guardSeal.position.y = 1.15 + Math.sin(k * Math.PI) * 0.45;
+      guardSeal.material.opacity = Math.sin(k * Math.PI);
+    });
+
+    // 衝第一線對不敬敵子發射青金演算法雷射與閃電制裁
+    const strikeList = targets.length ? targets : [pos];
+    strikeList.forEach((tp, idx) => {
+      const delay = idx * 0.14;
+      setTimeout(() => {
+        const a = new THREE.Vector3(pos.x, 0.38, pos.z);
+        const b = new THREE.Vector3(tp.x, 0.32, tp.z);
+        this.beam(a, b, color, 0.55, 0.065);
+        this.lightning(a, b, '#ffd700', 0.35);
+        this.pillar(tp, color, 0.75);
+        this.shockwave(tp, color, 1.4, 0.42, 0.04, 0.14);
+        this.burst(tp, color, 55, { speed: 4.8, size: 0.16, mix: '#ffd700' });
+
+        const tex = this._guoTex[(idx + 1) % this._guoTex.length];
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(1.7, 2.2, 2.4),
+        }));
+        sp.position.set(tp.x, 0.8, tp.z);
+        sp.scale.setScalar(0.88);
+        this.add(sp, t => {
+          const k = t / 0.8;
+          if (k >= 1) return false;
+          sp.position.y = 0.7 + k * 0.85;
           sp.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
         });
       }, delay * 1000);

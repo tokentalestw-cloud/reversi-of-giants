@@ -319,6 +319,34 @@ export class Game {
           break;
         }
 
+        case 'guozhenren': {
+          basic();
+          // 郭真人衝第一個護駕：優先鎖定緊鄰「劉真人」或己方特殊棋子的不敬敵子（最多 3 枚），以資工博士演算法駭入翻轉
+          const cand = [];
+          for (let c = 0; c < 64; c++) {
+            if (!enemyOK(c)) continue;
+            const nbs = neighbors(c);
+            const nearMaster = nbs.some(n => B[n] === color && this.marks[n] === 'liuzhenren') ? 1000 : 0;
+            const nearSpecial = nbs.some(n => B[n] === color && this.marks[n]) ? 300 : 0;
+            const nearGuo = cheb(c, i) <= 2 ? 150 : 0;
+            const nearOwn = nbs.filter(n => B[n] === color).length * 30;
+            cand.push({ c, score: nearMaster + nearSpecial + nearGuo + nearOwn + rng() });
+          }
+          cand.sort((a, b) => b.score - a.score);
+          const hacked = spare(cand.slice(0, 3).map(x => x.c));
+          res.steps.push({ kind: 'guoguard', origin: i, cells: hacked });
+          flip(hacked, 'flip', { style: 'guozhenren' });
+          // 為場上師父劉真人、郭真人自身及周圍己方棋子架起 2 回合「資工防火牆」護盾
+          const guardSet = new Set([i, ...neighbors(i).filter(c => B[c] === color)]);
+          for (let c = 0; c < 64; c++) {
+            if (B[c] === color && this.marks[c] === 'liuzhenren') guardSet.add(c);
+          }
+          for (const c of guardSet) {
+            this.shields[c] = Math.max(this.shields[c] || 0, this.ply + SHIELD_PLIES);
+          }
+          break;
+        }
+
         default: throw new Error('未知的能力');
       }
 

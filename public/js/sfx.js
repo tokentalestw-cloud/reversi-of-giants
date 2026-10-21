@@ -102,6 +102,12 @@ export class Sfx {
           T(120 - i * 10, 0.3, { type: 'sawtooth', slide: 42, vol: 0.26, delay: i * 0.16 });
         }
         break;
+      case 'guozhenren':
+        // 資工高速演算數據音 + 防火牆護駕共鳴 + 雷射制裁
+        for (let i = 0; i < 8; i++) T(700 + i * 180, 0.06, { type: 'square', vol: 0.08, delay: i * 0.04 });
+        T(440, 0.85, { type: 'triangle', slide: 880, vol: 0.22, delay: 0.15 });
+        N(0.45, { freq: 2400, q: 2.5, slide: 600, vol: 0.35, delay: 0.18 });
+        break;
       default: break;
     }
   }
