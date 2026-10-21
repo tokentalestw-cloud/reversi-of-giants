@@ -61,6 +61,18 @@ export const SCIENTISTS = [
     desc: '一般落子後施展渾元勁「閃電五連鞭」：連續揮出五記金雷鞭擊，每次隨機抽打距離落點 3 格內的 1 枚敵方棋子使其翻轉（最多連抽 5 枚）！',
     quote: '年輕人不講武德，耗子尾汁！看我閃電五連鞭！',
   },
+  {
+    id: 'trump', name: '唐納·川普', short: '川普', en: 'Donald Trump', years: '1946–',
+    field: '美國總統・關稅與築牆', skill: '關稅壁壘', target: 'legal', color: '#ff9d2e',
+    desc: '一般落子後啟動「超級關稅與築牆」：強制徵收棋盤外圍邊線上的敵方棋子（最多 3 枚；若邊線無敵子則改徵收全盤最多 2 枚）翻轉為己方，並為落點與徵收棋子築起金色護牆保護 1 回合！',
+    quote: '我們要築起一道美麗的高牆，而且要讓對手買單！Make Reversi Great Again!',
+  },
+  {
+    id: 'liuzhenren', name: '劉真人', short: '劉真人', en: 'True-Heart Immortal Liu', years: '真情男子漢',
+    field: '真情・專情・用心・負責', skill: '真情天罰', target: 'legal', color: '#ff3864',
+    desc: '真情男子漢，專門降天罰處罰對感情不忠的負心漢！一般落子後降下「真情・專情・用心・負責」四道九天雷罰，審判場上曾變心翻面過或左擁右抱的不忠敵子（最多 4 枚）劈回己方，且自身堅守專情護盾 2 回合絕不變心！',
+    quote: '真情、專情、用心、負責！凡對感情不忠的負心漢，必降天罰！',
+  },
 ];
 
 const MAP = Object.fromEntries(SCIENTISTS.map(s => [s.id, s]));

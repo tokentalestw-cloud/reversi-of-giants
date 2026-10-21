@@ -16,6 +16,8 @@ export class Effects {
     this._qTex = this._textTexture('?', '#ff4fd8');
     this._leafTex = this._textTexture('❦', '#9be15d');
     this._whipTex = ['閃', '電', '五', '連', '鞭'].map(ch => this._textTexture(ch, '#ffe14d'));
+    this._trumpTex = ['$', '稅', 'WIN'].map(ch => this._textTexture(ch, '#ff9d2e'));
+    this._liuTex = ['真情', '專情', '用心', '負責', '天罰'].map(ch => this._textTexture(ch, '#ff3864'));
   }
 
   // ------------------------------------------------------------ 粒子
@@ -146,9 +148,11 @@ export class Effects {
   _textTexture(txt, color) {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const x = c.getContext('2d');
-    x.font = 'bold 96px Consolas, monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.shadowColor = color; x.shadowBlur = 18; x.fillStyle = color; x.fillText(txt, 64, 70);
-    x.shadowBlur = 0; x.fillStyle = '#ffffff'; x.globalAlpha = 0.6; x.fillText(txt, 64, 70);
+    const fs = txt.length >= 3 ? 42 : txt.length === 2 ? 54 : 92;
+    x.font = `900 ${fs}px "Noto Serif TC", "Microsoft JhengHei", Consolas, sans-serif`;
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.shadowColor = color; x.shadowBlur = 16; x.fillStyle = color; x.fillText(txt, 64, 66);
+    x.shadowBlur = 0; x.fillStyle = '#ffffff'; x.globalAlpha = 0.65; x.fillText(txt, 64, 66);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
 
@@ -500,7 +504,109 @@ export class Effects {
       sp.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
     });
   }
+
+  /** 川普：關稅壁壘（黃金城牆升起 + 漫天美金「$ / 稅 / WIN」雨 + 金紅藍煙火） */
+  trumpWall(pos, targets, color = '#ff9d2e', dur = 1.25) {
+    const allPos = [pos, ...targets];
+    // 為每個受影響格升起四面黃金城牆磚框
+    for (const p of allPos) {
+      const wallG = new THREE.Group();
+      const mat = this.glowMat('#ffbb44', 0.85, 2.5);
+      for (let side = 0; side < 4; side++) {
+        const brick = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.55, 0.08), mat);
+        const ang = (side * Math.PI) / 2;
+        brick.position.set(Math.sin(ang) * 0.44, 0.28, Math.cos(ang) * 0.44);
+        brick.rotation.y = ang;
+        wallG.add(brick);
+      }
+      wallG.position.set(p.x, 0, p.z);
+      wallG.scale.set(1, 0.01, 1);
+      this.add(wallG, t => {
+        const k = t / dur;
+        if (k >= 1) return false;
+        const h = k < 0.22 ? easeOutStep(k / 0.22) : k > 0.78 ? 1 - (k - 0.78) / 0.22 : 1;
+        wallG.scale.set(1, Math.max(0.01, h), 1);
+        mat.opacity = 0.85 * h;
+      });
+    }
+    // 漫天美金與關稅符號
+    for (let k = 0; k < 28; k++) {
+      const tex = this._trumpTex[k % this._trumpTex.length];
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.2, 1.9, 1.1),
+      }));
+      const baseP = allPos[k % allPos.length];
+      const a = Math.random() * Math.PI * 2, r = rand(0.1, 0.9), delay = Math.random() * 0.35;
+      sp.position.set(baseP.x + Math.cos(a) * r, 0.2, baseP.z + Math.sin(a) * r);
+      sp.scale.setScalar(0.48);
+      sp.material.opacity = 0;
+      this.add(sp, t => {
+        const k2 = (t - delay) / 0.95;
+        if (k2 >= 1) return false;
+        if (k2 < 0) return;
+        sp.position.y = 0.2 + k2 * 1.9;
+        sp.material.opacity = Math.sin(k2 * Math.PI);
+      });
+    }
+    for (const tp of targets) {
+      this.beam(new THREE.Vector3(pos.x, 0.35, pos.z), new THREE.Vector3(tp.x, 0.35, tp.z), '#ffbb44', 0.65, 0.06);
+      this.burst(tp, '#ffbb44', 50, { speed: 4.5, size: 0.16, mix: '#4a90ff' });
+    }
+    this.shockwave(pos, color, 3.0, 0.85);
+    this.flash(pos, color, 50, dur);
+  }
+
+  /** 劉真人：真情天罰（九天赤金天雷轟頂 + 「真情・專情・用心・負責・天罰」道印顯化） */
+  heavenlyPunish(pos, targets, color = '#ff3864', dur = 1.35) {
+    // 落點升起「真情男子漢」赤金護盾光陣與「天罰」大印
+    this.shockwave(pos, color, 3.2, 0.9);
+    this.shockwave(pos, '#ffd700', 2.1, 0.65, 0.05, 0.14);
+    this.flash(pos, color, 65, dur);
+
+    const centerSeal = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this._liuTex[4], transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.4, 1.8, 1.8),
+    }));
+    centerSeal.position.set(pos.x, 1.3, pos.z);
+    centerSeal.scale.setScalar(1.1);
+    this.add(centerSeal, t => {
+      const k = t / dur;
+      if (k >= 1) return false;
+      centerSeal.position.y = 1.1 + Math.sin(k * Math.PI) * 0.5;
+      centerSeal.material.opacity = Math.sin(k * Math.PI);
+    });
+
+    // 對每一枚負心漢敵子降下九天雷柱與「真情・專情・用心・負責」四大道印
+    const strikeList = targets.length ? targets : [pos];
+    strikeList.forEach((tp, idx) => {
+      const delay = idx * 0.16;
+      setTimeout(() => {
+        const sky = new THREE.Vector3(tp.x + rand(-0.3, 0.3), 6.2, tp.z + rand(-0.3, 0.3));
+        const ground = new THREE.Vector3(tp.x, 0.25, tp.z);
+        this.lightning(sky, ground, '#ff3864', 0.52);
+        this.lightning(sky, ground, '#ffd700', 0.38);
+        this.pillar(tp, '#ff3864', 0.85);
+        this.shockwave(tp, '#ffd700', 1.5, 0.45, 0.04, 0.15);
+        this.burst(tp, '#ff3864', 65, { speed: 5.2, size: 0.18, mix: '#ffd700' });
+        this.flash(tp, '#ff3864', 55, 0.45);
+
+        const sealTex = this._liuTex[idx % 4];
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: sealTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.3, 2.0, 1.5),
+        }));
+        sp.position.set(tp.x, 0.85, tp.z);
+        sp.scale.setScalar(0.95);
+        this.add(sp, t => {
+          const k = t / 0.85;
+          if (k >= 1) return false;
+          sp.position.y = 0.75 + k * 0.95;
+          sp.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+        });
+      }, delay * 1000);
+    });
+  }
 }
+
+const easeOutStep = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 
 export function accretionMaterial(strength = 1) {
   return new THREE.ShaderMaterial({

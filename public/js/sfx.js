@@ -89,6 +89,19 @@ export class Sfx {
       case 'schrodinger': T(440, 1.5, { type: 'sine', vol: 0.15, slide: 880 }); T(466, 1.5, { type: 'sine', vol: 0.15, slide: 830 }); break;
       case 'darwin': [392, 494, 587, 784].forEach((f, i) => T(f, 0.5, { type: 'triangle', vol: 0.12, delay: i * 0.12 })); N(1, { freq: 2000, vol: 0.08 }); break;
       case 'mabaoguo': T(110, 0.45, { type: 'sawtooth', slide: 330, vol: 0.25 }); N(0.35, { freq: 1200, slide: 4800, vol: 0.35 }); break;
+      case 'trump':
+        // 築牆重擊 + 金幣收銀清脆鈴響
+        T(85, 0.45, { slide: 40, vol: 0.5 });
+        [1046, 1318, 1568, 2093].forEach((f, i) => T(f, 0.32, { type: 'triangle', vol: 0.16, delay: 0.1 + i * 0.09 }));
+        break;
+      case 'liuzhenren':
+        // 正氣劍鳴 + 四道九天雷罰轟頂
+        T(523, 0.7, { type: 'sawtooth', slide: 1046, vol: 0.15 });
+        for (let i = 0; i < 4; i++) {
+          N(0.32, { freq: 1800, q: 2.2, slide: 420, vol: 0.48, delay: i * 0.16 });
+          T(120 - i * 10, 0.3, { type: 'sawtooth', slide: 42, vol: 0.26, delay: i * 0.16 });
+        }
+        break;
       default: break;
     }
   }

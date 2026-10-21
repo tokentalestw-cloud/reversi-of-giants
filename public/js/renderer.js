@@ -627,6 +627,20 @@ export class BoardView {
           break;
         }
 
+        case 'trumpwall':
+          this.sfx?.ability('trump');
+          this.effects.trumpWall(pos, st.cells.map(c => cellPos(c)), fx);
+          this.shake(0.2);
+          await this.wait(0.75);
+          break;
+
+        case 'punish':
+          this.sfx?.ability('liuzhenren');
+          this.effects.heavenlyPunish(pos, st.cells.map(c => cellPos(c)), fx);
+          this.shake(0.24);
+          await this.wait(0.85);
+          break;
+
         default: break;
       }
     }

@@ -39,6 +39,7 @@ export class Game {
     this.ply = 0;
     this.shields = {};   // cell -> 屏蔽持續到第幾手（不含）
     this.marks = {};     // cell -> 科學家 id（特殊棋子標記）
+    this.betrayed = {};  // cell -> 該格棋子曾變心翻轉的次數（供劉真人天罰審判）
     this.charges = { [BLACK]: MAX_CHARGES, [WHITE]: MAX_CHARGES };
     this.used = { [BLACK]: [], [WHITE]: [] };
     this.over = false;
@@ -54,6 +55,7 @@ export class Game {
     g.ply = this.ply;
     g.shields = { ...this.shields };
     g.marks = { ...this.marks };
+    g.betrayed = { ...this.betrayed };
     g.charges = { ...this.charges };
     g.used = { [BLACK]: this.used[BLACK].slice(), [WHITE]: this.used[WHITE].slice() };
     g.over = this.over;
@@ -138,7 +140,10 @@ export class Game {
       const flip = (cells, kind, extra = {}) => {
         let uniq = [...new Set(cells)].filter(enemyOK);
         if (extra.style) uniq = spare(uniq);
-        for (const c of uniq) B[c] = color;
+        for (const c of uniq) {
+          B[c] = color;
+          this.betrayed[c] = (this.betrayed[c] || 0) + 1;
+        }
         if (uniq.length) res.steps.push({ kind, cells: uniq, origin: i, ...extra });
         return uniq;
       };
@@ -191,7 +196,8 @@ export class Game {
             const best = Math.min(...cand.map(c => dist2(c, cur)));
             const near = cand.filter(c => dist2(c, cur) === best);
             const next = near[Math.floor(rng() * near.length)];
-            B[next] = color; hit.push(next); path.push(next); cur = next;
+            B[next] = color; this.betrayed[next] = (this.betrayed[next] || 0) + 1;
+            hit.push(next); path.push(next); cur = next;
           }
           res.steps.push({ kind: 'lightning', origin: i, path, cells: hit });
           break;
@@ -210,7 +216,7 @@ export class Game {
           delete this.marks[i];
           res.steps.push({ kind: 'blackhole', cell: i });
           const eaten = spare(neighbors(i).filter(enemyOK));
-          for (const c of eaten) { B[c] = EMPTY; delete this.marks[c]; delete this.shields[c]; }
+          for (const c of eaten) { B[c] = EMPTY; delete this.marks[c]; delete this.shields[c]; delete this.betrayed[c]; }
           if (eaten.length) res.steps.push({ kind: 'remove', origin: i, cells: eaten });
           break;
         }
@@ -218,6 +224,7 @@ export class Game {
         case 'turing': {
           B[i] = color;
           this.marks[i] = 'turing';
+          this.betrayed[i] = (this.betrayed[i] || 0) + 1;
           res.steps.push({ kind: 'decode', cell: i, color });
           flip(this.flipsFrom(i, color), 'flip', { style: 'turing' });
           break;
@@ -262,9 +269,53 @@ export class Game {
             if (!cand.length || this.count(o) <= 1) break;
             const pick = cand[Math.floor(rng() * cand.length)];
             B[pick] = color;
+            this.betrayed[pick] = (this.betrayed[pick] || 0) + 1;
             hits.push(pick);
           }
           res.steps.push({ kind: 'fivewhip', origin: i, cells: hits });
+          break;
+        }
+
+        case 'trump': {
+          basic();
+          // 優先徵收棋盤外圍四條邊線上的敵方棋子（最多 3 枚）；若邊線無敵子則改徵收全盤最多 2 枚
+          const border = [], inner = [];
+          for (let c = 0; c < 64; c++) {
+            if (!enemyOK(c)) continue;
+            const [cx, cy] = xy(c);
+            if (cx === 0 || cx === 7 || cy === 0 || cy === 7) border.push(c);
+            else inner.push(c);
+          }
+          for (let k = border.length - 1; k > 0; k--) { const j = Math.floor(rng() * (k + 1)); [border[k], border[j]] = [border[j], border[k]]; }
+          for (let k = inner.length - 1; k > 0; k--) { const j = Math.floor(rng() * (k + 1)); [inner[k], inner[j]] = [inner[j], inner[k]]; }
+          const rawPick = border.length > 0 ? border.slice(0, 3) : inner.slice(0, 2);
+          const taxed = spare(rawPick);
+          res.steps.push({ kind: 'trumpwall', origin: i, cells: taxed });
+          flip(taxed, 'flip', { style: 'trump' });
+          // 為落點與被徵收的棋子築起金色護牆保護 1 回合（2 手）
+          for (const c of [i, ...taxed]) {
+            if (B[c] === color) this.shields[c] = Math.max(this.shields[c] || 0, this.ply + 2);
+          }
+          break;
+        }
+
+        case 'liuzhenren': {
+          basic();
+          // 專門審判對感情不忠的負心漢：優先鎖定曾變心翻面過的敵子，其次鎖定左擁右抱（周圍相鄰棋子多）的敵子，最多劈 4 枚
+          const cand = [];
+          for (let c = 0; c < 64; c++) {
+            if (!enemyOK(c)) continue;
+            const bCount = this.betrayed[c] || 0;
+            const adjCount = neighbors(c).filter(n => B[n] === BLACK || B[n] === WHITE).length;
+            const score = bCount * 100 + adjCount * 10 + rng();
+            cand.push({ c, score });
+          }
+          cand.sort((a, b) => b.score - a.score);
+          const punished = spare(cand.slice(0, 4).map(x => x.c));
+          // 劉真人專情負責：自身獲得 2 回合專情護盾，絕不變心
+          this.shields[i] = Math.max(this.shields[i] || 0, this.ply + SHIELD_PLIES);
+          res.steps.push({ kind: 'punish', origin: i, cells: punished });
+          flip(punished, 'flip', { style: 'liuzhenren' });
           break;
         }
 
