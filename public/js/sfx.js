@@ -71,6 +71,13 @@ export class Sfx {
     this._noise(0.06, { vol: 0.65, freq: 4500, q: 3.5, delay: 0.04 });
     this._tone(base, 0.18, { type: 'sawtooth', vol: 0.22, slide: base * 2.4 });
   }
+  thunder(idx = 0) {
+    if (!this._ensure()) return;
+    const base = 96 - (idx % 4) * 8;
+    this._noise(0.28, { vol: 0.55, freq: 1600, q: 2.2, slide: 320 });
+    this._noise(0.06, { vol: 0.62, freq: 5200, q: 3.0, delay: 0.01 });
+    this._tone(base, 0.28, { type: 'sawtooth', vol: 0.35, slide: 35 });
+  }
   select() { if (this._ensure()) { this._tone(660, 0.12, { type: 'triangle', vol: 0.15 }); this._tone(990, 0.15, { type: 'triangle', vol: 0.12, delay: 0.06 }); } }
   error() { if (this._ensure()) this._tone(180, 0.2, { type: 'square', vol: 0.08, slide: 120 }); }
   turn() { if (this._ensure()) { this._tone(880, 0.15, { vol: 0.1 }); this._tone(1320, 0.25, { vol: 0.08, delay: 0.08 }); } }
@@ -95,12 +102,10 @@ export class Sfx {
         [1046, 1318, 1568, 2093].forEach((f, i) => T(f, 0.32, { type: 'triangle', vol: 0.16, delay: 0.1 + i * 0.09 }));
         break;
       case 'liuzhenren':
-        // 正氣劍鳴 + 四道九天雷罰轟頂
-        T(523, 0.7, { type: 'sawtooth', slide: 1046, vol: 0.15 });
-        for (let i = 0; i < 4; i++) {
-          N(0.32, { freq: 1800, q: 2.2, slide: 420, vol: 0.48, delay: i * 0.16 });
-          T(120 - i * 10, 0.3, { type: 'sawtooth', slide: 42, vol: 0.26, delay: i * 0.16 });
-        }
+        // 正氣天罡劍鳴 + 滾滾天威九天雷雲
+        T(523, 0.65, { type: 'sawtooth', slide: 1046, vol: 0.16 });
+        T(659, 0.65, { type: 'triangle', slide: 1318, vol: 0.12, delay: 0.04 });
+        N(0.42, { freq: 900, q: 1.5, slide: 220, vol: 0.28 });
         break;
       case 'guozhenren':
         // 資工高速演算數據音 + 防火牆護駕共鳴 + 雷射制裁

@@ -286,40 +286,52 @@ export class Effects {
     });
   }
 
-  /** 特斯拉：鋸齒閃電（持續閃爍重生） */
+  /** 特斯拉：鋸齒閃電（零 GC / 雙交替幾何 + 矩陣顫動 + 爆鳴） */
   lightning(a, b, color, dur = 0.45) {
     const g = new THREE.Group();
     const coreMat = this.glowMat('#ffffff', 1, 4), glowMat = this.glowMat(color, 0.7, 4);
-    const rebuild = () => {
-      g.children.forEach(c => c.geometry.dispose()); g.clear();
-      const pts = [], n = 10, dir = b.clone().sub(a), len = dir.length();
-      const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+    const dir = b.clone().sub(a), len = dir.length();
+    const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+
+    const makeTubes = () => {
+      const pts = [], n = 8;
       for (let i = 0; i <= n; i++) {
-        const p = a.clone().lerp(b, i / n);
+        const u = i / n;
+        const p = a.clone().lerp(b, u);
         if (i > 0 && i < n) {
-          const amp = 0.18 * len * Math.sin((i / n) * Math.PI) * 0.35;
-          p.addScaledVector(side, rand(-amp, amp)); p.y += rand(-amp, amp) * 0.6 + Math.sin((i / n) * Math.PI) * 0.5;
+          const amp = 0.16 * len * Math.sin(u * Math.PI) * 0.35;
+          p.addScaledVector(side, rand(-amp, amp));
+          p.y += rand(-amp, amp) * 0.5 + Math.sin(u * Math.PI) * 0.35;
         }
         pts.push(p);
       }
-      const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.1);
-      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.025, 5), coreMat));
-      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.09, 6), glowMat));
-      // 分岔
-      const fi = 3 + Math.floor(Math.random() * 4), fp = pts[fi];
-      const end = fp.clone().add(new THREE.Vector3(rand(-0.6, 0.6), rand(-0.2, 0.3), rand(-0.6, 0.6)));
-      const mid = fp.clone().lerp(end, 0.5).add(new THREE.Vector3(rand(-0.15, 0.15), rand(-0.1, 0.1), rand(-0.15, 0.15)));
-      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([fp, mid, end]), 10, 0.015, 4), coreMat));
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const core = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.025, 4), coreMat);
+      const glow = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.08, 5), glowMat);
+      return [core, glow];
     };
-    rebuild();
-    let acc = 0;
+
+    const set1 = makeTubes();
+    const set2 = makeTubes();
+    set1.forEach(m => g.add(m));
+    set2.forEach(m => { m.visible = false; g.add(m); });
+
     this.add(g, (t, dt) => {
-      if (t >= dur) { coreMat.dispose(); glowMat.dispose(); return false; }
-      acc += dt; if (acc > 0.05) { acc = 0; rebuild(); }
-      const o = 1 - t / dur; coreMat.opacity = o; glowMat.opacity = 0.7 * o * (0.6 + Math.random() * 0.4);
+      if (t >= dur) {
+        set1.forEach(m => m.geometry.dispose());
+        set2.forEach(m => m.geometry.dispose());
+        coreMat.dispose(); glowMat.dispose();
+        return false;
+      }
+      const show1 = Math.random() < 0.5;
+      set1.forEach(m => m.visible = show1);
+      set2.forEach(m => m.visible = !show1);
+      const o = 1 - t / dur;
+      coreMat.opacity = o;
+      glowMat.opacity = 0.7 * o * (0.6 + Math.random() * 0.4);
     });
-    this.flash(b, color, 35, dur * 1.2);
-    this.burst(b, color, 40, { speed: 4, size: 0.12, mix: '#ffffff' });
+    this.flash(b, color, 30, dur);
+    this.burst(b, color, 30, { speed: 3.5, size: 0.12, mix: '#ffffff' });
   }
 
   /** 法拉第：電磁籠（網格穹頂） */
@@ -557,52 +569,102 @@ export class Effects {
     this.flash(pos, color, 50, dur);
   }
 
-  /** 劉真人：真情天罰（九天赤金天雷轟頂 + 「真情・專情・用心・負責・天罰」道印顯化） */
-  heavenlyPunish(pos, targets, color = '#ff3864', dur = 1.35) {
-    // 落點升起「真情男子漢」赤金護盾光陣與「天罰」大印
-    this.shockwave(pos, color, 3.2, 0.9);
-    this.shockwave(pos, '#ffd700', 2.1, 0.65, 0.05, 0.14);
-    this.flash(pos, color, 65, dur);
+  /** 劉真人：落點真情大印與護體赤金光陣 */
+  liuSeal(pos, color = '#ff3864', dur = 1.1) {
+    this.shockwave(pos, color, 3.0, 0.85);
+    this.shockwave(pos, '#ffd700', 2.0, 0.6, 0.05, 0.14);
+    this.flash(pos, color, 35, 0.55);
 
     const centerSeal = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: this._liuTex[4], transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.4, 1.8, 1.8),
+      map: this._liuTex[4], transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.5, 1.8, 1.8),
     }));
-    centerSeal.position.set(pos.x, 1.3, pos.z);
-    centerSeal.scale.setScalar(1.1);
+    centerSeal.position.set(pos.x, 1.1, pos.z);
+    centerSeal.scale.setScalar(1.15);
     this.add(centerSeal, t => {
       const k = t / dur;
       if (k >= 1) return false;
-      centerSeal.position.y = 1.1 + Math.sin(k * Math.PI) * 0.5;
+      centerSeal.position.y = 1.05 + Math.sin(k * Math.PI) * 0.45;
       centerSeal.material.opacity = Math.sin(k * Math.PI);
     });
+  }
 
-    // 對每一枚負心漢敵子降下九天雷柱與「真情・專情・用心・負責」四大道印
+  /** 劉真人：九天真情神雷（零 GC 靜態幾何 + 矩陣顫動雷柱 + 「真情/專情/用心/負責」道印） */
+  divineThunder(tp, idx = 0, color = '#ff3864', dur = 0.42) {
+    const g = new THREE.Group();
+    g.position.set(tp.x, 0, tp.z);
+
+    const coreMat = this.glowMat('#ffffff', 1.0, 4.0);
+    const auraCol = idx % 2 === 0 ? color : '#ffd700';
+    const auraMat = this.glowMat(auraCol, 0.85, 3.5);
+
+    // 1. 直衝雲霄的雷柱核心與赤金電漿護層（高度 6.5）
+    const coreGeo = new THREE.CylinderGeometry(0.045, 0.075, 6.5, 8, 1, true);
+    const auraGeo = new THREE.CylinderGeometry(0.18, 0.32, 6.5, 12, 1, true);
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    const auraMesh = new THREE.Mesh(auraGeo, auraMat);
+    coreMesh.position.y = 3.25;
+    auraMesh.position.y = 3.25;
+    g.add(coreMesh, auraMesh);
+
+    // 2. 狂暴折線雷弧（生成一次，動畫時僅靠旋轉與縮放顫動，零 GC）
+    const pts = [];
+    const n = 8;
+    for (let i = 0; i <= n; i++) {
+      const u = i / n;
+      const py = 6.5 * (1 - u);
+      const amp = Math.sin(u * Math.PI) * 0.4;
+      const jx = i === 0 || i === n ? 0 : rand(-amp, amp);
+      const jz = i === 0 || i === n ? 0 : rand(-amp, amp);
+      pts.push(new THREE.Vector3(jx, py, jz));
+    }
+    const arcGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 20, 0.035, 4);
+    const arcMesh = new THREE.Mesh(arcGeo, coreMat);
+    g.add(arcMesh);
+
+    this.add(g, t => {
+      if (t >= dur) {
+        coreGeo.dispose();
+        auraGeo.dispose();
+        arcGeo.dispose();
+        coreMat.dispose();
+        auraMat.dispose();
+        return false;
+      }
+      const k = t / dur;
+      const o = (1 - k) * (0.65 + Math.random() * 0.35);
+      coreMat.opacity = o;
+      auraMat.opacity = o * 0.85;
+      g.rotation.y = t * 25;
+      g.scale.set(1.0 + Math.sin(t * 70) * 0.3, 1.0, 1.0 + Math.cos(t * 80) * 0.3);
+    });
+
+    // 3. 地面衝擊波與赤金碎雷火花
+    this.shockwave(tp, '#ffd700', 1.4, 0.35, 0.03, 0.16);
+    this.burst(tp, color, 28, { speed: 4.5, size: 0.15, mix: '#ffd700', gravity: -8 });
+
+    // 4. 「真情・專情・用心・負責」道印顯化升空
+    const sealTex = this._liuTex[idx % 4];
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: sealTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.3, 2.0, 1.5),
+    }));
+    sp.position.set(tp.x, 0.85, tp.z);
+    sp.scale.setScalar(0.95);
+    this.add(sp, t => {
+      const k = t / 0.8;
+      if (k >= 1) return false;
+      sp.position.y = 0.75 + k * 0.95;
+      sp.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+    });
+  }
+
+  /** 劉真人：真情天罰（向下相容便利方法） */
+  heavenlyPunish(pos, targets, color = '#ff3864', dur = 1.35) {
+    this.liuSeal(pos, color, dur);
     const strikeList = targets.length ? targets : [pos];
     strikeList.forEach((tp, idx) => {
-      const delay = idx * 0.16;
       setTimeout(() => {
-        const sky = new THREE.Vector3(tp.x + rand(-0.3, 0.3), 6.2, tp.z + rand(-0.3, 0.3));
-        const ground = new THREE.Vector3(tp.x, 0.25, tp.z);
-        this.lightning(sky, ground, '#ff3864', 0.52);
-        this.lightning(sky, ground, '#ffd700', 0.38);
-        this.pillar(tp, '#ff3864', 0.85);
-        this.shockwave(tp, '#ffd700', 1.5, 0.45, 0.04, 0.15);
-        this.burst(tp, '#ff3864', 65, { speed: 5.2, size: 0.18, mix: '#ffd700' });
-        this.flash(tp, '#ff3864', 55, 0.45);
-
-        const sealTex = this._liuTex[idx % 4];
-        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: sealTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: new THREE.Color(2.3, 2.0, 1.5),
-        }));
-        sp.position.set(tp.x, 0.85, tp.z);
-        sp.scale.setScalar(0.95);
-        this.add(sp, t => {
-          const k = t / 0.85;
-          if (k >= 1) return false;
-          sp.position.y = 0.75 + k * 0.95;
-          sp.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
-        });
-      }, delay * 1000);
+        this.divineThunder(tp, idx, color, 0.42);
+      }, idx * 180);
     });
   }
 

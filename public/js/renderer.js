@@ -634,12 +634,28 @@ export class BoardView {
           await this.wait(0.75);
           break;
 
-        case 'punish':
+        case 'punish': {
           this.sfx?.ability('liuzhenren');
-          this.effects.heavenlyPunish(pos, st.cells.map(c => cellPos(c)), fx);
-          this.shake(0.24);
-          await this.wait(0.85);
+          this.effects.liuSeal(pos, fx);
+          this.shake(0.2);
+          const targets = st.cells || [];
+          if (targets.length === 0) {
+            await this.wait(0.5);
+          } else {
+            const flips = [];
+            for (let k = 0; k < targets.length; k++) {
+              const targetCell = targets[k];
+              const tp = cellPos(targetCell);
+              this.effects.divineThunder(tp, k, fx);
+              this.sfx?.thunder(k);
+              this.shake(0.16 + k * 0.02);
+              flips.push(this.flipPiece(targetCell, color, st.origin, fx));
+              await this.wait(0.2);
+            }
+            await Promise.all(flips);
+          }
           break;
+        }
 
         case 'guoguard':
           this.sfx?.ability('guozhenren');

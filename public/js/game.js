@@ -312,10 +312,13 @@ export class Game {
           }
           cand.sort((a, b) => b.score - a.score);
           const punished = spare(cand.slice(0, 4).map(x => x.c));
+          for (const c of punished) {
+            B[c] = color;
+            this.betrayed[c] = (this.betrayed[c] || 0) + 1;
+          }
           // 劉真人專情負責：自身獲得 2 回合專情護盾，絕不變心
           this.shields[i] = Math.max(this.shields[i] || 0, this.ply + SHIELD_PLIES);
           res.steps.push({ kind: 'punish', origin: i, cells: punished });
-          flip(punished, 'flip', { style: 'liuzhenren' });
           break;
         }
 
